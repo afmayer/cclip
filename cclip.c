@@ -50,7 +50,7 @@ int WriteToClipboard(unsigned int format, const void *pData, unsigned int sizeBy
 int main(int argc, char *argv[])
 {
     HANDLE standardin = GetStdHandle(STD_INPUT_HANDLE);
-    unsigned char *pInputBuffer;
+    char *pInputBuffer;
     wchar_t *pUnicodeBuffer;
     unsigned int inputBufferSize;
     unsigned int unicodeBufferSize;
@@ -109,7 +109,7 @@ int main(int argc, char *argv[])
     pUnicodeBuffer = malloc(unicodeBufferSize);
     if (pUnicodeBuffer == NULL)
     {
-        fprintf(stderr, "Could not allocate output buffer\n");
+        fprintf(stderr, "Could not allocate Unicode conversion buffer\n");
         exit(1);
     }
 
