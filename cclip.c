@@ -58,6 +58,7 @@ int main(int argc, char *argv[])
     unsigned int totalReadBytes;
     unsigned int codepage;
     unsigned int fileType;
+    unsigned int endOfInput = 0;
     int retval;
 
     inputBufferSize = 0;
@@ -100,40 +101,51 @@ int main(int argc, char *argv[])
 
     pInputBuffer = NULL;
     totalReadBytes = 0;
-    while (1)
+    while (!endOfInput)
     {
-        unsigned int readbytes;
+        unsigned int bufferRemainingBytes;
         char *pReadPointer;
 
         pInputBuffer = realloc(pInputBuffer, inputBufferSize + inputBufferSizeStep);
         pReadPointer = pInputBuffer + inputBufferSize;
         inputBufferSize += inputBufferSizeStep;
+        bufferRemainingBytes = inputBufferSizeStep;
         if (pInputBuffer == NULL)
         {
             fprintf(stderr, "Could not allocate input buffer\n");
             exit(1);
         }
 
-        // TODO double buffer size for each call and read everyting into one buffer
-        if (!ReadFile(standardin, pReadPointer, inputBufferSizeStep, &readbytes, NULL))
+        do
         {
-            unsigned int err = GetLastError();
-            if (err == ERROR_BROKEN_PIPE && GetFileType(standardin) == FILE_TYPE_PIPE)
+            unsigned int readBytes;
+            if (!ReadFile(standardin, pReadPointer, bufferRemainingBytes, &readBytes, NULL))
             {
+                unsigned int err = GetLastError();
+                if (err == ERROR_BROKEN_PIPE)
+                {
+                    endOfInput = 1;
+                    break;
+                }
+                else
+                {
+                    fprintf(stderr, "ReadFile() failed, GetLastError() = 0x%X\n", GetLastError());
+                    free(pInputBuffer);
+                    exit(1);
+                }
+            }
+
+            pReadPointer += readBytes;
+            bufferRemainingBytes -= readBytes;
+
+            if (readBytes == 0)
+            {
+                endOfInput = 1;
                 break;
             }
-            else
-            {
-                fprintf(stderr, "ReadFile() failed, GetLastError() = 0x%X\n", GetLastError());
-                free(pInputBuffer);
-                exit(1);
-            }
-        }
+        } while (bufferRemainingBytes != 0);
 
-        if (readbytes == 0)
-            break;
-
-        totalReadBytes += readbytes;
+        totalReadBytes += (inputBufferSizeStep - bufferRemainingBytes);
     }
 
     unicodeBufferCharacters =
