@@ -149,6 +149,7 @@ int main(int argc, char *argv[])
     if (retval == 0)
     {
         fprintf(stderr, "MultiByteToWideChar() failed, GetLastError() = %X\n", GetLastError());
+        free(pUnicodeBuffer);
         free(pInputBuffer);
         exit(1);
     }
@@ -159,6 +160,9 @@ int main(int argc, char *argv[])
     if (retval != 0)
     {
         fprintf(stderr, "WriteToClipboard() returned %d\n", retval);
+        free(pUnicodeBuffer);
         exit(1);
     }
+
+    free(pUnicodeBuffer);
 }
