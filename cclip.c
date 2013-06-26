@@ -57,6 +57,7 @@ int main(int argc, char *argv[])
     unsigned int unicodeBufferSize;
     unsigned int totalReadBytes;
     unsigned int codepage;
+    unsigned int fileType;
     int retval;
 
     inputBufferSize = 0;
@@ -68,13 +69,30 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    // TODO use GetFileType() to determine type
-    //   FILE_TYPE_DISK --> invoked as cclip.exe < somefile.txt
-    //   FILE_TYPE_CHAR --> invoked as cclip.exe
-    //   FILE_TYPE_PIPE --> invoked as someprocess.exe | cclip.exe
-
     codepage = GetConsoleCP();
-    // TODO use codepage = GetACP() when reading from a file
+    fileType = GetFileType(standardin);
+    if (fileType == FILE_TYPE_DISK)
+    {
+        /* standard input is redirected to a file - use system default codepage */
+        codepage = GetACP();
+    }
+    else if (fileType == FILE_TYPE_CHAR)
+    {
+        /* standard input is connected to a console */
+        // TODO handle standard input connected to console
+    }
+    else if (fileType == FILE_TYPE_PIPE)
+    {
+        /* standard input is connected to a pipe - use process console codepage */
+    }
+    else if (fileType == FILE_TYPE_UNKNOWN)
+    {
+        if (GetLastError() != NO_ERROR)
+        {
+            // TODO Handle error in GetFileType()
+        }
+    }
+
     // TODO command line switch for input codepage override
     //   allow default codepage identifiers CP_ACP, CP_OEMCP, ?CP_MACCP?,
     //   CP_THREAD_ACP, CP_SYMBOL, CP_UTF7 and CP_UTF8
