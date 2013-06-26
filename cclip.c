@@ -54,7 +54,7 @@ int main(int argc, char *argv[])
     wchar_t *pUnicodeBuffer;
     unsigned int inputBufferSize;
     unsigned int inputBufferSizeStep;
-    unsigned int unicodeBufferSize;
+    unsigned int unicodeBufferCharacters;
     unsigned int totalReadBytes;
     unsigned int codepage;
     unsigned int fileType;
@@ -91,6 +91,7 @@ int main(int argc, char *argv[])
         {
             // TODO Handle error in GetFileType()
         }
+        // TODO handle FILE_TYPE_UNKNOWN
     }
 
     // TODO command line switch for input codepage override
@@ -135,8 +136,15 @@ int main(int argc, char *argv[])
         totalReadBytes += readbytes;
     }
 
-    unicodeBufferSize = totalReadBytes * sizeof(wchar_t);
-    pUnicodeBuffer = malloc(unicodeBufferSize);
+    unicodeBufferCharacters =
+        MultiByteToWideChar(codepage, 0, pInputBuffer, totalReadBytes, NULL, 0);
+    if (unicodeBufferCharacters == 0)
+    {
+        fprintf(stderr, "MultiByteToWideChar() failed, GetLastError() = %X\n", GetLastError());
+        free(pInputBuffer);
+        exit(1);
+    }
+    pUnicodeBuffer = malloc((unicodeBufferCharacters + 1) * sizeof(wchar_t));
     if (pUnicodeBuffer == NULL)
     {
         fprintf(stderr, "Could not allocate Unicode conversion buffer\n");
@@ -144,8 +152,8 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    retval = MultiByteToWideChar(codepage, 0, pInputBuffer, totalReadBytes, pUnicodeBuffer,
-        unicodeBufferSize / sizeof(wchar_t));
+    retval = MultiByteToWideChar(codepage, 0, pInputBuffer, totalReadBytes,
+        pUnicodeBuffer, unicodeBufferCharacters);
     if (retval == 0)
     {
         fprintf(stderr, "MultiByteToWideChar() failed, GetLastError() = %X\n", GetLastError());
@@ -153,6 +161,7 @@ int main(int argc, char *argv[])
         free(pInputBuffer);
         exit(1);
     }
+    pUnicodeBuffer[unicodeBufferCharacters] = L'\0';
 
     free(pInputBuffer);
 
