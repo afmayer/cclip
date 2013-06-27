@@ -207,7 +207,8 @@ int main(int argc, char *argv[])
 
     free(pInputBuffer);
 
-    retval = WriteToClipboard(CF_UNICODETEXT, pUnicodeBuffer, retval * sizeof(wchar_t));
+    retval = WriteToClipboard(CF_UNICODETEXT, pUnicodeBuffer,
+        (unicodeBufferCharacters + 1) * sizeof(wchar_t));
     if (retval != 0)
     {
         fprintf(stderr, "WriteToClipboard() returned %d\n", retval);
