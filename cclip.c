@@ -21,16 +21,16 @@
 
 /* ReadFileToBuffer()
  *
- * Allocate a buffer fill it with data from a given file handle. Returns the
- * address of the allocated buffer (which must be released by the caller) and
- * the number of read bytes. The size of the allocated buffer is not returned
- * but will be the next multiple of bufferSizeStep greater than the returned
- * number of read bytes.
+ * Allocate a buffer and fill it with data from a given file handle. Returns
+ * the address of the allocated buffer (which must be released by the caller)
+ * and the number of read bytes. The size of the allocated buffer is not
+ * returned but will be the next multiple of bufferSizeStep greater than the
+ * returned number of read bytes.
  *
  * Returns zero on success. Returns -1 when the buffer could not be
  * (re-)allocated and -2 when reading from the handle fails. When an error
- * occurrs no buffer must be released by the caller and the values of the output
- * pointers are undefined.
+ * occurrs no buffer must be released by the caller and the values of the
+ * output pointers are undefined.
  */
 int ReadFileToBuffer(HANDLE fileHandle, unsigned int bufferSizeStep,
                      void **ppAllocatedBuffer, unsigned int *pReadBytes)
@@ -90,6 +90,7 @@ int ReadFileToBuffer(HANDLE fileHandle, unsigned int bufferSizeStep,
     return 0;
 }
 
+// TODO documentation for WriteToClipboard()
 int WriteToClipboard(unsigned int format, const void *pData,
                      unsigned int sizeBytes)
 {
