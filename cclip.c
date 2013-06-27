@@ -1,7 +1,79 @@
 #include <windows.h>
 #include <stdio.h>
 
-int WriteToClipboard(unsigned int format, const void *pData, unsigned int sizeBytes)
+/* ReadFileToBuffer()
+ *
+ * Allocate a buffer fill it with data from a given file handle. Returns the
+ * address of the allocated buffer (which must be released by the caller) and
+ * the number of read bytes. The size of the allocated buffer is not returned
+ * but will be the next multiple of bufferSizeStep greater than the returned
+ * number of read bytes.
+ *
+ * Returns zero on success. Returns -1 when the buffer could not be
+ * (re-)allocated and -2 when reading from the handle fails. When an error
+ * occurrs no buffer must be released by the caller and the values of the output
+ * pointers are undefined.
+ */
+int ReadFileToBuffer(HANDLE fileHandle, unsigned int bufferSizeStep,
+                     void **ppAllocatedBuffer, unsigned int *pReadBytes)
+{
+    char *pInputBuffer = NULL;
+    unsigned int inputBufferSize = 0;
+    unsigned int yEndOfInput = 0;
+    unsigned int totalReadBytes = 0;
+
+    while (!yEndOfInput)
+    {
+        unsigned int bufferRemainingBytes;
+        char *pReadPointer;
+
+        pInputBuffer = realloc(pInputBuffer, inputBufferSize + bufferSizeStep);
+        pReadPointer = pInputBuffer + inputBufferSize;
+        inputBufferSize += bufferSizeStep;
+        bufferRemainingBytes = bufferSizeStep;
+        if (pInputBuffer == NULL)
+            return -1;
+
+        do
+        {
+            unsigned int readBytes;
+            if (!ReadFile(fileHandle, pReadPointer, bufferRemainingBytes,
+                &readBytes, NULL))
+            {
+                unsigned int err = GetLastError();
+                if (err == ERROR_BROKEN_PIPE)
+                {
+                    yEndOfInput = 1;
+                    break;
+                }
+                else
+                {
+                    free(pInputBuffer);
+                    return -2;
+                }
+            }
+
+            pReadPointer += readBytes;
+            bufferRemainingBytes -= readBytes;
+
+            if (readBytes == 0)
+            {
+                yEndOfInput = 1;
+                break;
+            }
+        } while (bufferRemainingBytes != 0);
+
+        totalReadBytes += (bufferSizeStep - bufferRemainingBytes);
+    }
+
+    /* success */
+    *ppAllocatedBuffer = pInputBuffer;
+    *pReadBytes = totalReadBytes;
+    return 0;
+}
+
+int WriteToClipboard(unsigned int format, const void *pData,
+                     unsigned int sizeBytes)
 {
     HGLOBAL hGlobalMem;
     unsigned char *pGlobalMem;
@@ -52,16 +124,13 @@ int main(int argc, char *argv[])
     HANDLE standardin = GetStdHandle(STD_INPUT_HANDLE);
     char *pInputBuffer;
     wchar_t *pUnicodeBuffer;
-    unsigned int inputBufferSize;
     unsigned int inputBufferSizeStep;
     unsigned int unicodeBufferCharacters;
     unsigned int totalReadBytes;
     unsigned int codepage;
     unsigned int fileType;
-    unsigned int endOfInput = 0;
     int retval;
 
-    inputBufferSize = 0;
     inputBufferSizeStep = 4096; // TODO buffer size step command line switch
 
     if (standardin == INVALID_HANDLE_VALUE)
@@ -74,7 +143,7 @@ int main(int argc, char *argv[])
     fileType = GetFileType(standardin);
     if (fileType == FILE_TYPE_DISK)
     {
-        /* standard input is redirected to a file - use system default codepage */
+        /* stdin is redirected to a file - use system default codepage */
         codepage = GetACP();
     }
     else if (fileType == FILE_TYPE_CHAR)
@@ -84,7 +153,7 @@ int main(int argc, char *argv[])
     }
     else if (fileType == FILE_TYPE_PIPE)
     {
-        /* standard input is connected to a pipe - use process console codepage */
+        /* stdin is connected to a pipe - use console codepage */
     }
     else if (fileType == FILE_TYPE_UNKNOWN)
     {
@@ -99,60 +168,20 @@ int main(int argc, char *argv[])
     //   allow default codepage identifiers CP_ACP, CP_OEMCP, ?CP_MACCP?,
     //   CP_THREAD_ACP, CP_SYMBOL, CP_UTF7 and CP_UTF8
 
-    pInputBuffer = NULL;
-    totalReadBytes = 0;
-    while (!endOfInput)
+    retval = ReadFileToBuffer(standardin, inputBufferSizeStep, &pInputBuffer,
+        &totalReadBytes);
+    if (retval != 0)
     {
-        unsigned int bufferRemainingBytes;
-        char *pReadPointer;
-
-        pInputBuffer = realloc(pInputBuffer, inputBufferSize + inputBufferSizeStep);
-        pReadPointer = pInputBuffer + inputBufferSize;
-        inputBufferSize += inputBufferSizeStep;
-        bufferRemainingBytes = inputBufferSizeStep;
-        if (pInputBuffer == NULL)
-        {
-            fprintf(stderr, "Could not allocate input buffer\n");
-            exit(1);
-        }
-
-        do
-        {
-            unsigned int readBytes;
-            if (!ReadFile(standardin, pReadPointer, bufferRemainingBytes, &readBytes, NULL))
-            {
-                unsigned int err = GetLastError();
-                if (err == ERROR_BROKEN_PIPE)
-                {
-                    endOfInput = 1;
-                    break;
-                }
-                else
-                {
-                    fprintf(stderr, "ReadFile() failed, GetLastError() = 0x%X\n", GetLastError());
-                    free(pInputBuffer);
-                    exit(1);
-                }
-            }
-
-            pReadPointer += readBytes;
-            bufferRemainingBytes -= readBytes;
-
-            if (readBytes == 0)
-            {
-                endOfInput = 1;
-                break;
-            }
-        } while (bufferRemainingBytes != 0);
-
-        totalReadBytes += (inputBufferSizeStep - bufferRemainingBytes);
+        fprintf(stderr, "ReadFileToBuffer() returned %d\n", retval);
+        exit(1);
     }
 
     unicodeBufferCharacters =
         MultiByteToWideChar(codepage, 0, pInputBuffer, totalReadBytes, NULL, 0);
     if (unicodeBufferCharacters == 0)
     {
-        fprintf(stderr, "MultiByteToWideChar() failed, GetLastError() = %X\n", GetLastError());
+        fprintf(stderr, "MultiByteToWideChar() failed, GetLastError() = %X\n",
+            GetLastError());
         free(pInputBuffer);
         exit(1);
     }
@@ -168,7 +197,8 @@ int main(int argc, char *argv[])
         pUnicodeBuffer, unicodeBufferCharacters);
     if (retval == 0)
     {
-        fprintf(stderr, "MultiByteToWideChar() failed, GetLastError() = %X\n", GetLastError());
+        fprintf(stderr, "MultiByteToWideChar() failed, GetLastError() = %X\n",
+            GetLastError());
         free(pUnicodeBuffer);
         free(pInputBuffer);
         exit(1);
