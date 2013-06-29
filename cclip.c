@@ -16,6 +16,11 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifdef _MSC_VER
+#define _CRT_SECURE_NO_WARNINGS
+#define snprintf _snprintf
+#endif /* #ifdef _MSC_VER */
+
 #include <windows.h>
 #include <stdio.h>
 
