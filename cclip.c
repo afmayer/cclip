@@ -29,7 +29,7 @@ typedef struct ErrBlock_
     char errDescription[256];
 } ErrBlock;
 
-/* ReadFileToBuffer()
+/* ReadFileToNewBuffer()
  *
  * Allocate a buffer and fill it with data from a given file handle. Returns
  * the address of the allocated buffer (which must be released by the caller)
@@ -42,7 +42,7 @@ typedef struct ErrBlock_
  * an error description. When an error occurrs no buffer must be released by
  * the caller and the values of the output pointers are undefined.
  */
-int ReadFileToBuffer(HANDLE fileHandle, unsigned int bufferSizeStep,
+int ReadFileToNewBuffer(HANDLE fileHandle, unsigned int bufferSizeStep,
                      void **ppAllocatedBuffer, unsigned int *pReadBytes,
                      ErrBlock *pEb)
 {
@@ -252,11 +252,11 @@ int main(int argc, char *argv[])
     //   allow default codepage identifiers CP_ACP, CP_OEMCP, ?CP_MACCP?,
     //   CP_THREAD_ACP, CP_SYMBOL, CP_UTF7 and CP_UTF8
 
-    retval = ReadFileToBuffer(standardin, inputBufferSizeStep, &pInputBuffer,
-        &totalReadBytes, &eb);
+    retval = ReadFileToNewBuffer(standardin, inputBufferSizeStep,
+        &pInputBuffer, &totalReadBytes, &eb);
     if (retval != 0)
     {
-        fprintf(stderr, "ERROR: ReadFileToBuffer() returned %d\n    %s\n",
+        fprintf(stderr, "ERROR: ReadFileToNewBuffer() returned %d\n    %s\n",
             retval, eb.errDescription);
         exit(1);
     }
