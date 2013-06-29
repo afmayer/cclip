@@ -24,6 +24,11 @@
 #include <windows.h>
 #include <stdio.h>
 
+typedef struct ErrBlock_
+{
+    char errDescription[256];
+} ErrBlock;
+
 /* ReadFileToBuffer()
  *
  * Allocate a buffer and fill it with data from a given file handle. Returns
@@ -32,13 +37,14 @@
  * returned but will be the next multiple of bufferSizeStep greater than the
  * returned number of read bytes.
  *
- * Returns zero on success. Returns -1 when the buffer could not be
- * (re-)allocated and -2 when reading from the handle fails. When an error
- * occurrs no buffer must be released by the caller and the values of the
- * output pointers are undefined.
+ * Returns zero on success and a negative number otherwise. In case of an error
+ * and when the error block pointer is not NULL the error block is filled with
+ * an error description. When an error occurrs no buffer must be released by
+ * the caller and the values of the output pointers are undefined.
  */
 int ReadFileToBuffer(HANDLE fileHandle, unsigned int bufferSizeStep,
-                     void **ppAllocatedBuffer, unsigned int *pReadBytes)
+                     void **ppAllocatedBuffer, unsigned int *pReadBytes,
+                     ErrBlock *pEb)
 {
     char *pInputBuffer = NULL;
     unsigned int inputBufferSize = 0;
@@ -55,7 +61,15 @@ int ReadFileToBuffer(HANDLE fileHandle, unsigned int bufferSizeStep,
         inputBufferSize += bufferSizeStep;
         bufferRemainingBytes = bufferSizeStep;
         if (pInputBuffer == NULL)
+        {
+            if (pEb != NULL)
+            {
+                snprintf(pEb->errDescription, sizeof(pEb->errDescription),
+                    "Could not allocate memory for input buffer");
+                pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
+            }
             return -1;
+        }
 
         do
         {
@@ -72,6 +86,15 @@ int ReadFileToBuffer(HANDLE fileHandle, unsigned int bufferSizeStep,
                 else
                 {
                     free(pInputBuffer);
+                    if (pEb != NULL)
+                    {
+                        snprintf(pEb->errDescription,
+                            sizeof(pEb->errDescription),
+                            "ReadFile() failed, GetLastError() = 0x%X",
+                            GetLastError()); // TODO use FormatMessage()
+                        pEb->errDescription[
+                            sizeof(pEb->errDescription) - 1] = '\0';
+                    }
                     return -2;
                 }
             }
@@ -97,17 +120,32 @@ int ReadFileToBuffer(HANDLE fileHandle, unsigned int bufferSizeStep,
 
 // TODO documentation for WriteToClipboard()
 int WriteToClipboard(unsigned int format, const void *pData,
-                     unsigned int sizeBytes)
+                     unsigned int sizeBytes, ErrBlock *pEb)
 {
     HGLOBAL hGlobalMem;
     unsigned char *pGlobalMem;
 
     if (!OpenClipboard(0))
+    {
+        if (pEb != NULL)
+        {
+            snprintf(pEb->errDescription, sizeof(pEb->errDescription),
+                "OpenClipboard() failed, GetLastError() = 0x%X",
+                GetLastError());
+            pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
+        }
         return -1;
+    }
 
     if (!EmptyClipboard())
     {
-        DWORD err = GetLastError();
+        if (pEb != NULL)
+        {
+            snprintf(pEb->errDescription, sizeof(pEb->errDescription),
+                "EmptyClipboard() failed, GetLastError() = 0x%X",
+                GetLastError());
+            pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
+        }
         CloseClipboard();
         return -2;
     }
@@ -115,6 +153,13 @@ int WriteToClipboard(unsigned int format, const void *pData,
     hGlobalMem = GlobalAlloc(GMEM_MOVEABLE, sizeBytes);
     if (hGlobalMem == NULL)
     {
+        if (pEb != NULL)
+        {
+            snprintf(pEb->errDescription, sizeof(pEb->errDescription),
+                "GlobalAlloc() failed, GetLastError() = 0x%X",
+                GetLastError());
+            pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
+        }
         CloseClipboard();
         return -3;
     }
@@ -122,6 +167,13 @@ int WriteToClipboard(unsigned int format, const void *pData,
     pGlobalMem = GlobalLock(hGlobalMem);
     if (pGlobalMem == NULL)
     {
+        if (pEb != NULL)
+        {
+            snprintf(pEb->errDescription, sizeof(pEb->errDescription),
+                "GlobalLock() failed, GetLastError() = 0x%X",
+                GetLastError());
+            pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
+        }
         GlobalFree(hGlobalMem);
         CloseClipboard();
         return -4;
@@ -132,6 +184,13 @@ int WriteToClipboard(unsigned int format, const void *pData,
 
     if (!SetClipboardData(format, hGlobalMem))
     {
+        if (pEb != NULL)
+        {
+            snprintf(pEb->errDescription, sizeof(pEb->errDescription),
+                "GlobalLock() failed, GetLastError() = 0x%X",
+                GetLastError());
+            pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
+        }
         GlobalFree(hGlobalMem);
         CloseClipboard();
         return -5;
@@ -154,6 +213,7 @@ int main(int argc, char *argv[])
     unsigned int codepage;
     unsigned int fileType;
     int retval;
+    ErrBlock eb;
 
     inputBufferSizeStep = 4096; // TODO buffer size step command line switch
 
@@ -193,10 +253,11 @@ int main(int argc, char *argv[])
     //   CP_THREAD_ACP, CP_SYMBOL, CP_UTF7 and CP_UTF8
 
     retval = ReadFileToBuffer(standardin, inputBufferSizeStep, &pInputBuffer,
-        &totalReadBytes);
+        &totalReadBytes, &eb);
     if (retval != 0)
     {
-        fprintf(stderr, "ReadFileToBuffer() returned %d\n", retval);
+        fprintf(stderr, "ERROR: ReadFileToBuffer() returned %d\n    %s\n",
+            retval, eb.errDescription);
         exit(1);
     }
 
@@ -232,10 +293,11 @@ int main(int argc, char *argv[])
     free(pInputBuffer);
 
     retval = WriteToClipboard(CF_UNICODETEXT, pUnicodeBuffer,
-        (unicodeBufferCharacters + 1) * sizeof(wchar_t));
+        (unicodeBufferCharacters + 1) * sizeof(wchar_t), &eb);
     if (retval != 0)
     {
-        fprintf(stderr, "WriteToClipboard() returned %d\n", retval);
+        fprintf(stderr, "ERROR: WriteToClipboard() returned %d\n    %s\n",
+            retval, eb.errDescription);
         free(pUnicodeBuffer);
         exit(1);
     }
