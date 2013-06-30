@@ -26,6 +26,7 @@
 
 typedef struct ErrBlock_
 {
+    unsigned int functionSpecificErrorCode;
     char errDescription[256];
 } ErrBlock;
 
@@ -37,7 +38,7 @@ typedef struct ErrBlock_
  * buffer is not returned but will be the next multiple of bufferSizeStep
  * greater than or equal to the returned number of read bytes.
  *
- * Returns zero on success and a negative number otherwise. In case of an error
+ * Returns zero on success or -1 in case of an error. In case of an error
  * and when the error block pointer is not NULL the error block is filled with
  * an error description. When an error occurrs no buffer must be released by
  * the caller and the values of the output pointers are undefined.
@@ -67,6 +68,7 @@ int ReadFileToNewBuffer(HANDLE fileHandle, unsigned int bufferSizeStep,
                 snprintf(pEb->errDescription, sizeof(pEb->errDescription),
                     "Could not allocate memory for input buffer");
                 pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
+                pEb->functionSpecificErrorCode = 1;
             }
             return -1;
         }
@@ -94,8 +96,9 @@ int ReadFileToNewBuffer(HANDLE fileHandle, unsigned int bufferSizeStep,
                             GetLastError()); // TODO use FormatMessage()
                         pEb->errDescription[
                             sizeof(pEb->errDescription) - 1] = '\0';
+                        pEb->functionSpecificErrorCode = 2;
                     }
-                    return -2;
+                    return -1;
                 }
             }
 
@@ -126,7 +129,7 @@ int ReadFileToNewBuffer(HANDLE fileHandle, unsigned int bufferSizeStep,
  * must be released by the caller) and the size of the allocated buffer in
  * output variables.
  *
- * Returns zero on success and a negative number otherwise. In case of an error
+ * Returns zero on success or -1 in case of an error. In case of an error
  * and when the error block pointer is not NULL the error block is filled with
  * an error description. When an error occurrs no buffer must be released by
  * the caller and the values of the output pointers are undefined.
@@ -152,6 +155,7 @@ int ConvToZeroTerminatedWideCharNewBuffer(const char *pInputBuffer,
                 "MultiByteToWideChar() failed, GetLastError() = 0x%X",
                 GetLastError());
             pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
+            pEb->functionSpecificErrorCode = 1;
         }
         return -1;
     }
@@ -163,8 +167,9 @@ int ConvToZeroTerminatedWideCharNewBuffer(const char *pInputBuffer,
             snprintf(pEb->errDescription, sizeof(pEb->errDescription),
                 "Could not allocate conversion buffer");
             pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
+            pEb->functionSpecificErrorCode = 2;
         }
-        return -2;
+        return -1;
     }
 
     retval = MultiByteToWideChar(codepage, 0, pInputBuffer, numberOfInputBytes,
@@ -177,9 +182,10 @@ int ConvToZeroTerminatedWideCharNewBuffer(const char *pInputBuffer,
                 "MultiByteToWideChar() failed, GetLastError() = 0x%X",
                 GetLastError());
             pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
+            pEb->functionSpecificErrorCode = 3;
         }
         free(pWideCharBuf);
-        return -3;
+        return -1;
     }
     pWideCharBuf[numberOfWideCharacters] = L'\0';
 
@@ -204,6 +210,7 @@ int WriteToClipboard(unsigned int format, const void *pData,
                 "OpenClipboard() failed, GetLastError() = 0x%X",
                 GetLastError());
             pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
+            pEb->functionSpecificErrorCode = 1;
         }
         return -1;
     }
@@ -216,9 +223,10 @@ int WriteToClipboard(unsigned int format, const void *pData,
                 "EmptyClipboard() failed, GetLastError() = 0x%X",
                 GetLastError());
             pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
+            pEb->functionSpecificErrorCode = 2;
         }
         CloseClipboard();
-        return -2;
+        return -1;
     }
 
     hGlobalMem = GlobalAlloc(GMEM_MOVEABLE, sizeBytes);
@@ -230,9 +238,10 @@ int WriteToClipboard(unsigned int format, const void *pData,
                 "GlobalAlloc() failed, GetLastError() = 0x%X",
                 GetLastError());
             pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
+            pEb->functionSpecificErrorCode = 3;
         }
         CloseClipboard();
-        return -3;
+        return -1;
     }
 
     pGlobalMem = GlobalLock(hGlobalMem);
@@ -244,10 +253,11 @@ int WriteToClipboard(unsigned int format, const void *pData,
                 "GlobalLock() failed, GetLastError() = 0x%X",
                 GetLastError());
             pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
+            pEb->functionSpecificErrorCode = 4;
         }
         GlobalFree(hGlobalMem);
         CloseClipboard();
-        return -4;
+        return -1;
     }
 
     CopyMemory(pGlobalMem, pData, sizeBytes);
@@ -261,10 +271,11 @@ int WriteToClipboard(unsigned int format, const void *pData,
                 "GlobalLock() failed, GetLastError() = 0x%X",
                 GetLastError());
             pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
+            pEb->functionSpecificErrorCode = 5;
         }
         GlobalFree(hGlobalMem);
         CloseClipboard();
-        return -5;
+        return -1;
     }
 
     CloseClipboard();
