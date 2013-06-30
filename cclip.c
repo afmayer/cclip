@@ -31,11 +31,11 @@ typedef struct ErrBlock_
 
 /* ReadFileToNewBuffer()
  *
- * Allocate a buffer and fill it with data from a given file handle. Returns
+ * Allocate a buffer and fill it with data from a given file handle. Stores
  * the address of the allocated buffer (which must be released by the caller)
- * and the number of read bytes. The size of the allocated buffer is not
- * returned but will be the next multiple of bufferSizeStep greater than the
- * returned number of read bytes.
+ * and the number of read bytes in output variables. The size of the allocated
+ * buffer is not returned but will be the next multiple of bufferSizeStep
+ * greater than or equal to the returned number of read bytes.
  *
  * Returns zero on success and a negative number otherwise. In case of an error
  * and when the error block pointer is not NULL the error block is filled with
@@ -115,6 +115,77 @@ int ReadFileToNewBuffer(HANDLE fileHandle, unsigned int bufferSizeStep,
     /* success */
     *ppAllocatedBuffer = pInputBuffer;
     *pReadBytes = totalReadBytes;
+    return 0;
+}
+
+/* ConvToZeroTerminatedWideCharNewBuffer()
+ *
+ * Convert a given string (not zero terminated) in a given codepage to a wide
+ * character string and store it in an allocated buffer, adding a zero
+ * termination character. Stores the address of the allocated buffer (which
+ * must be released by the caller) and the size of the allocated buffer in
+ * output variables.
+ *
+ * Returns zero on success and a negative number otherwise. In case of an error
+ * and when the error block pointer is not NULL the error block is filled with
+ * an error description. When an error occurrs no buffer must be released by
+ * the caller and the values of the output pointers are undefined.
+ */
+int ConvToZeroTerminatedWideCharNewBuffer(const char *pInputBuffer,
+                                          unsigned int numberOfInputBytes,
+                                          unsigned int codepage,
+                                          wchar_t **ppAllocatedWideCharBuffer,
+                                          unsigned int *pAllocatedBufSizeBytes,
+                                          ErrBlock *pEb)
+{
+    int retval;
+    int numberOfWideCharacters;
+    wchar_t *pWideCharBuf;
+
+    numberOfWideCharacters = MultiByteToWideChar(codepage, 0, pInputBuffer,
+        numberOfInputBytes, NULL, 0);
+    if (numberOfWideCharacters == 0)
+    {
+        if (pEb != NULL)
+        {
+            snprintf(pEb->errDescription, sizeof(pEb->errDescription),
+                "MultiByteToWideChar() failed, GetLastError() = 0x%X",
+                GetLastError());
+            pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
+        }
+        return -1;
+    }
+    pWideCharBuf = malloc((numberOfWideCharacters + 1) * sizeof(wchar_t));
+    if (pWideCharBuf == NULL)
+    {
+        if (pEb != NULL)
+        {
+            snprintf(pEb->errDescription, sizeof(pEb->errDescription),
+                "Could not allocate conversion buffer");
+            pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
+        }
+        return -2;
+    }
+
+    retval = MultiByteToWideChar(codepage, 0, pInputBuffer, numberOfInputBytes,
+        pWideCharBuf, numberOfWideCharacters);
+    if (retval == 0)
+    {
+        if (pEb != NULL)
+        {
+            snprintf(pEb->errDescription, sizeof(pEb->errDescription),
+                "MultiByteToWideChar() failed, GetLastError() = 0x%X",
+                GetLastError());
+            pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
+        }
+        free(pWideCharBuf);
+        return -3;
+    }
+    pWideCharBuf[numberOfWideCharacters] = L'\0';
+
+    /* success */
+    *ppAllocatedWideCharBuffer = pWideCharBuf;
+    *pAllocatedBufSizeBytes = (numberOfWideCharacters + 1) * sizeof(wchar_t);
     return 0;
 }
 
@@ -206,9 +277,9 @@ int main(int argc, char *argv[])
 {
     HANDLE standardin = GetStdHandle(STD_INPUT_HANDLE);
     char *pInputBuffer;
-    wchar_t *pUnicodeBuffer;
+    wchar_t *pWideCharBuf;
     unsigned int inputBufferSizeStep;
-    unsigned int unicodeBufferCharacters;
+    unsigned int wideCharBufSizeBytes;
     unsigned int totalReadBytes;
     unsigned int codepage;
     unsigned int fileType;
@@ -261,46 +332,27 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    unicodeBufferCharacters =
-        MultiByteToWideChar(codepage, 0, pInputBuffer, totalReadBytes, NULL, 0);
-    if (unicodeBufferCharacters == 0)
+    retval = ConvToZeroTerminatedWideCharNewBuffer(pInputBuffer,
+        totalReadBytes, codepage, &pWideCharBuf, &wideCharBufSizeBytes, &eb);
+    if (retval != 0)
     {
-        fprintf(stderr, "MultiByteToWideChar() failed, GetLastError() = %X\n",
-            GetLastError());
+        fprintf(stderr, "ERROR: ConvToZeroTerminatedWideCharNewBuffer() "
+            "returned %d\n    %s\n", retval, eb.errDescription);
         free(pInputBuffer);
         exit(1);
     }
-    pUnicodeBuffer = malloc((unicodeBufferCharacters + 1) * sizeof(wchar_t));
-    if (pUnicodeBuffer == NULL)
-    {
-        fprintf(stderr, "Could not allocate Unicode conversion buffer\n");
-        free(pInputBuffer);
-        exit(1);
-    }
-
-    retval = MultiByteToWideChar(codepage, 0, pInputBuffer, totalReadBytes,
-        pUnicodeBuffer, unicodeBufferCharacters);
-    if (retval == 0)
-    {
-        fprintf(stderr, "MultiByteToWideChar() failed, GetLastError() = %X\n",
-            GetLastError());
-        free(pUnicodeBuffer);
-        free(pInputBuffer);
-        exit(1);
-    }
-    pUnicodeBuffer[unicodeBufferCharacters] = L'\0';
 
     free(pInputBuffer);
 
-    retval = WriteToClipboard(CF_UNICODETEXT, pUnicodeBuffer,
-        (unicodeBufferCharacters + 1) * sizeof(wchar_t), &eb);
+    retval = WriteToClipboard(CF_UNICODETEXT, pWideCharBuf,
+        wideCharBufSizeBytes, &eb);
     if (retval != 0)
     {
         fprintf(stderr, "ERROR: WriteToClipboard() returned %d\n    %s\n",
             retval, eb.errDescription);
-        free(pUnicodeBuffer);
+        free(pWideCharBuf);
         exit(1);
     }
 
-    free(pUnicodeBuffer);
+    free(pWideCharBuf);
 }
