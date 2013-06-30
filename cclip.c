@@ -145,20 +145,28 @@ int ConvToZeroTerminatedWideCharNewBuffer(const char *pInputBuffer,
     int numberOfWideCharacters;
     wchar_t *pWideCharBuf;
 
-    numberOfWideCharacters = MultiByteToWideChar(codepage, 0, pInputBuffer,
-        numberOfInputBytes, NULL, 0);
-    if (numberOfWideCharacters == 0)
+    if (numberOfInputBytes != 0)
     {
-        if (pEb != NULL)
+        numberOfWideCharacters = MultiByteToWideChar(codepage, 0, pInputBuffer,
+            numberOfInputBytes, NULL, 0);
+        if (numberOfWideCharacters == 0)
         {
-            snprintf(pEb->errDescription, sizeof(pEb->errDescription),
-                "MultiByteToWideChar() failed, GetLastError() = 0x%X",
-                GetLastError());
-            pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
-            pEb->functionSpecificErrorCode = 1;
+            if (pEb != NULL)
+            {
+                snprintf(pEb->errDescription, sizeof(pEb->errDescription),
+                    "MultiByteToWideChar() space detection failed, "
+                    "GetLastError() = 0x%X", GetLastError());
+                pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
+                pEb->functionSpecificErrorCode = 1;
+            }
+            return -1;
         }
-        return -1;
     }
+    else
+    {
+        numberOfWideCharacters = 0;
+    }
+
     pWideCharBuf = malloc((numberOfWideCharacters + 1) * sizeof(wchar_t));
     if (pWideCharBuf == NULL)
     {
@@ -172,20 +180,23 @@ int ConvToZeroTerminatedWideCharNewBuffer(const char *pInputBuffer,
         return -1;
     }
 
-    retval = MultiByteToWideChar(codepage, 0, pInputBuffer, numberOfInputBytes,
-        pWideCharBuf, numberOfWideCharacters);
-    if (retval == 0)
+    if (numberOfInputBytes != 0)
     {
-        if (pEb != NULL)
+        retval = MultiByteToWideChar(codepage, 0, pInputBuffer,
+            numberOfInputBytes, pWideCharBuf, numberOfWideCharacters);
+        if (retval == 0)
         {
-            snprintf(pEb->errDescription, sizeof(pEb->errDescription),
-                "MultiByteToWideChar() failed, GetLastError() = 0x%X",
-                GetLastError());
-            pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
-            pEb->functionSpecificErrorCode = 3;
+            if (pEb != NULL)
+            {
+                snprintf(pEb->errDescription, sizeof(pEb->errDescription),
+                    "MultiByteToWideChar() conversion failed, GetLastError() "
+                    "= 0x%X", GetLastError());
+                pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
+                pEb->functionSpecificErrorCode = 3;
+            }
+            free(pWideCharBuf);
+            return -1;
         }
-        free(pWideCharBuf);
-        return -1;
     }
     pWideCharBuf[numberOfWideCharacters] = L'\0';
 
