@@ -23,12 +23,74 @@
 
 #include <windows.h>
 #include <stdio.h>
+#include <string.h>
 
 typedef struct ErrBlock_
 {
     unsigned int functionSpecificErrorCode;
     char errDescription[256];
 } ErrBlock;
+
+void ShowUsage(char *pArgv0)
+{
+    // TODO implement ShowUsage();
+}
+
+typedef struct CmdLineOptions_
+{
+    unsigned int yCodepageOverride;
+    unsigned int codepage;
+    unsigned int yInputBufferSizeStepOverride;
+    unsigned int inputBufferSizeStep;
+} CmdLineOptions;
+
+void ParseCommandLineOptions(int argc, const char *argv[],
+                             CmdLineOptions *pOptions)
+{
+    int i;
+
+    memset(pOptions, 0, sizeof(*pOptions));
+    for (i = 1; i < argc; i++)
+    {
+        if (strncmp(argv[i], "-c", 3) == 0 ||
+            strncmp(argv[i], "-cp", 4) == 0 ||
+            strncmp(argv[i], "-codepage", 10) == 0)
+        {
+            if (argc > i+1)
+            {
+                int val;
+                // TODO CHECK FOR CP_ACP, CP_OEMCP, ?CP_MACCP?,
+                //   CP_THREAD_ACP, CP_SYMBOL, CP_UTF7 and CP_UTF8
+                i++;
+                val = strtol(argv[i], NULL, 0);
+                if (val >= 0)
+                {
+                    pOptions->codepage = (unsigned int)val;
+                    pOptions->yCodepageOverride = 1;
+                }
+            }
+        }
+        else if (strncmp(argv[i], "-bufstep", 9) == 0)
+        {
+            if (argc > i+1)
+            {
+                int val;
+                i++;
+                val = strtol(argv[i], NULL, 0);
+                if (val > 0)
+                {
+                    pOptions->inputBufferSizeStep = (unsigned int)val;
+                    pOptions->yInputBufferSizeStepOverride = 1;
+                }
+            }
+        }
+        else
+        {
+            // TODO handle unsupported command line switches
+        }
+        // TODO buffer size step command line switch
+    }
+}
 
 /* ReadFileToNewBuffer()
  *
@@ -90,10 +152,14 @@ int ReadFileToNewBuffer(HANDLE fileHandle, unsigned int bufferSizeStep,
                     free(pInputBuffer);
                     if (pEb != NULL)
                     {
+                        // TODO multiple ErrBlock types + function for output
+                        //  - description in errDescription[]
+                        //  - GetLastError() number stored, later printed via FormatMessageW()
+                        //  - more?
                         snprintf(pEb->errDescription,
                             sizeof(pEb->errDescription),
                             "ReadFile() failed, GetLastError() = 0x%X",
-                            GetLastError()); // TODO use FormatMessage()
+                            GetLastError());
                         pEb->errDescription[
                             sizeof(pEb->errDescription) - 1] = '\0';
                         pEb->functionSpecificErrorCode = 2;
@@ -301,14 +367,19 @@ int main(int argc, char *argv[])
     char *pInputBuffer;
     wchar_t *pWideCharBuf;
     unsigned int inputBufferSizeStep;
-    unsigned int wideCharBufSizeBytes;
     unsigned int totalReadBytes;
+    unsigned int wideCharBufSizeBytes;
     unsigned int codepage;
-    unsigned int fileType;
     int retval;
     ErrBlock eb;
+    CmdLineOptions opt;
 
-    inputBufferSizeStep = 4096; // TODO buffer size step command line switch
+    ParseCommandLineOptions(argc, argv, &opt);
+
+    if (opt.yInputBufferSizeStepOverride)
+        inputBufferSizeStep = opt.inputBufferSizeStep;
+    else
+        inputBufferSizeStep = 4096;
 
     if (standardin == INVALID_HANDLE_VALUE)
     {
@@ -316,34 +387,39 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    codepage = GetConsoleCP();
-    fileType = GetFileType(standardin);
-    if (fileType == FILE_TYPE_DISK)
+    if (opt.yCodepageOverride)
     {
-        /* stdin is redirected to a file - use system default codepage */
-        codepage = GetACP();
+        codepage = opt.codepage;
     }
-    else if (fileType == FILE_TYPE_CHAR)
+    else
     {
-        /* standard input is connected to a console */
-        // TODO handle standard input connected to console
-    }
-    else if (fileType == FILE_TYPE_PIPE)
-    {
-        /* stdin is connected to a pipe - use console codepage */
-    }
-    else if (fileType == FILE_TYPE_UNKNOWN)
-    {
-        if (GetLastError() != NO_ERROR)
+        unsigned int fileType = GetFileType(standardin);
+        if (fileType == FILE_TYPE_DISK)
         {
-            // TODO Handle error in GetFileType()
+            /* stdin is redirected to a file - use system default codepage */
+            codepage = GetACP();
         }
-        // TODO handle FILE_TYPE_UNKNOWN
+        else if (fileType == FILE_TYPE_CHAR)
+        {
+            /* standard input is connected to a console */
+            codepage = GetConsoleCP();
+            // TODO handle standard input connected to console
+        }
+        else if (fileType == FILE_TYPE_PIPE)
+        {
+            /* stdin is connected to a pipe - use console codepage */
+            codepage = GetConsoleCP();
+        }
+        else if (fileType == FILE_TYPE_UNKNOWN)
+        {
+            if (GetLastError() != NO_ERROR)
+            {
+                // TODO Handle error in GetFileType()
+            }
+            // TODO handle FILE_TYPE_UNKNOWN
+            codepage = GetConsoleCP();
+        }
     }
-
-    // TODO command line switch for input codepage override
-    //   allow default codepage identifiers CP_ACP, CP_OEMCP, ?CP_MACCP?,
-    //   CP_THREAD_ACP, CP_SYMBOL, CP_UTF7 and CP_UTF8
 
     retval = ReadFileToNewBuffer(standardin, inputBufferSizeStep,
         &pInputBuffer, &totalReadBytes, &eb);
