@@ -88,7 +88,6 @@ void ParseCommandLineOptions(int argc, const char *argv[],
         {
             // TODO handle unsupported command line switches
         }
-        // TODO buffer size step command line switch
     }
 }
 
@@ -345,7 +344,7 @@ int WriteToClipboard(unsigned int format, const void *pData,
         if (pEb != NULL)
         {
             snprintf(pEb->errDescription, sizeof(pEb->errDescription),
-                "GlobalLock() failed, GetLastError() = 0x%X",
+                "SetClipboardData() failed, GetLastError() = 0x%X",
                 GetLastError());
             pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
             pEb->functionSpecificErrorCode = 5;
