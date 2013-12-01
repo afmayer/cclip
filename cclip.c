@@ -31,6 +31,30 @@ typedef struct ErrBlock_
     char errDescription[256];
 } ErrBlock;
 
+typedef enum TagType_
+{
+    TagTypeUnderscore,
+    TagTypeFgBlue,
+    TagTypeFgGreen,
+    TagTypeFgRed,
+    TagTypeBgBlue,
+    TagTypeBgGreen,
+    TagTypeBgRed
+    // TODO extend TagType enum values
+} TagType;
+
+typedef struct FormatInfo_
+{
+    unsigned int numberOfTags;
+    struct
+    {
+        unsigned int characterPos;
+        TagType type;
+        unsigned int parameter;
+        unsigned int yClose;
+    } tags[1];
+} FormatInfo;
+
 void ShowUsage(char *pArgv0)
 {
     // TODO implement ShowUsage();
@@ -186,6 +210,7 @@ int ReadFileToNewBuffer(HANDLE fileHandle, unsigned int bufferSizeStep,
     return 0;
 }
 
+// TODO change ConvToZeroTerminatedWideCharNewBuffer() to not include a NUL terminator character, adapt main()
 /* ConvToZeroTerminatedWideCharNewBuffer()
  *
  * Convert a given string (not zero terminated) in a given codepage to a wide
@@ -358,6 +383,31 @@ int WriteToClipboard(unsigned int format, const void *pData,
     GlobalFree(hGlobalMem);
 
     return 0;
+}
+
+/* GenerateClipboardHtml()
+ *
+ * Generate HTML code in the CF_HTML clipboard format (not NUL terminated) from
+ * a wide character input buffer and an optional FormatInfo structure and store
+ * it in an allocated buffer. Stores the address of the allocated buffer (which
+ * must be released by the caller) and the size of the allocated buffer in
+ * output variables. When the FormatInfo pointer is NULL no formatting is
+ * applied to the HTML output.
+ *
+ * Returns zero on success or -1 in case of an error. In case of an error
+ * and when the error block pointer is not NULL the error block is filled with
+ * an error description. When an error occurrs no buffer must be released by
+ * the caller and the values of the output pointers are undefined.
+ */
+int GenerateClipboardHtml(const wchar_t *pInputBuffer,
+                          unsigned int inputBufSizeBytes,
+                          const FormatInfo *pFormatInfo,
+                          char **ppAllocatedHtmlBuffer,
+                          unsigned int *pAllocatedHtmlBufSizeBytes,
+                          ErrBlock *pEb)
+{
+    // TODO implement GenerateClipboardHtml()
+    return -1;
 }
 
 int main(int argc, char *argv[])
