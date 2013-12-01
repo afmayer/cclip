@@ -476,8 +476,80 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
                           unsigned int *pAllocatedHtmlBufSizeBytes,
                           ErrBlock *pEb)
 {
+    char *pStartString = "Version:0.9\r\nStartHTML:0000000105\r\n"
+        "EndHTML:0000000000\r\nStartFragment:0000000141\r\n"
+        "EndFragment:0000000000\r\n<html>\r\n<body>\r\n<!--StartFragment-->";
+    char *pEndString = "<!--EndFragment-->\r\n</body>\r\n</html>";
+    char *pOutputBuffer;
+    unsigned int htmlSizeBytes;
+    int iReturnedSize;
     // TODO implement GenerateClipboardHtml()
-    return -1;
+
+    iReturnedSize = WideCharToMultiByte(CP_UTF8, 0, pInputBuffer,
+        inputBufSizeBytes / sizeof(wchar_t), NULL, 0, NULL, NULL);
+    if (iReturnedSize == 0)
+    {
+        if (pEb != NULL)
+        {
+            snprintf(pEb->errDescription, sizeof(pEb->errDescription),
+                "WideCharToMultiByte() space detection failed, "
+                "GetLastError() = 0x%X", GetLastError());
+            pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
+            pEb->functionSpecificErrorCode = 1;
+        }
+        return -1;
+    }
+    htmlSizeBytes = (unsigned int)iReturnedSize;
+    htmlSizeBytes += strlen(pStartString) + strlen(pEndString);
+
+    if (pFormatInfo != NULL)
+    {
+        unsigned int i;
+        for (i = 0; i < pFormatInfo->numberOfTags; i++)
+        {
+            iReturnedSize = GenerateHtmlMarkupFromFormatInfoTag(
+                pFormatInfo->tags[i].type,
+                pFormatInfo->tags[i].parameter,
+                pFormatInfo->tags[i].yClose,
+                NULL,
+                0);
+            if (iReturnedSize == -1)
+            {
+                if (pEb != NULL)
+                {
+                    snprintf(pEb->errDescription, sizeof(pEb->errDescription),
+                        "Could not generate HTML for tag type 0x%X with "
+                        "parameter 0x%X", pFormatInfo->tags[i].type,
+                        pFormatInfo->tags[i].parameter);
+                    pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
+                    pEb->functionSpecificErrorCode = 2;
+                }
+                return -1;
+            }
+            htmlSizeBytes += (unsigned int)iReturnedSize;
+        }
+    }
+
+    pOutputBuffer = malloc(htmlSizeBytes);
+    if (pOutputBuffer == NULL)
+    {
+        if (pEb != NULL)
+        {
+            snprintf(pEb->errDescription, sizeof(pEb->errDescription),
+                "Could not allocate buffer for HTML data");
+            pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
+            pEb->functionSpecificErrorCode = 3;
+        }
+        return -1;
+    }
+
+    // TODO fill buffer
+    // TODO correct EndHTML and EndFragment in the description
+
+    /* success */
+    *ppAllocatedHtmlBuffer = pOutputBuffer;
+    *pAllocatedHtmlBufSizeBytes = htmlSizeBytes;
+    return 0;
 }
 
 int main(int argc, char *argv[])
