@@ -385,6 +385,76 @@ int WriteToClipboard(unsigned int format, const void *pData,
     return 0;
 }
 
+/* GenerateHtmlMarkupFromFormatInfoTag()
+ *
+ * Generate HTML code in UTF8 (without a terminating NUL byte) from a TagType,
+ * a parameter and a boolean flag (indicating if the tag is a closing tag) and
+ * store it at a specified address. When the specified buffer size is 0 no data
+ * is written (for size calculation). Otherwise the function fails if the
+ * specified buffer size if smaller than the generated HTML code.
+ *
+ * Returns the number of bytes required by the generated UTF8 string (without a
+ * terminating NUL byte) on success or -1 in case of an error.
+ */
+int GenerateHtmlMarkupFromFormatInfoTag(TagType type, unsigned parameter,
+                                        unsigned int yClose,
+                                        char *pOutputBuffer,
+                                        unsigned int bufferSizeBytes)
+{
+    int returnValue;
+    char *pTag = NULL;
+    unsigned int yFreeTagPointer = 0;
+
+    if (type == TagTypeUnderscore)
+    {
+        if (!yClose)
+            pTag = "<u>";
+        else
+            pTag = "</u>";
+    }
+    else if (type == TagTypeBgBlue)
+    {
+        // TODO more tag types in GenerateHtmlMarkupFromFormatInfoTag()
+        pTag = "<blue>";
+    }
+
+    if (pTag == NULL)
+        return -1;
+
+    returnValue = strlen(pTag);
+
+    if (bufferSizeBytes != 0)
+    {
+        if (bufferSizeBytes >= (unsigned int)returnValue)
+            snprintf(pOutputBuffer, returnValue, pTag);
+        else
+            returnValue = -1;
+    }
+
+    if (yFreeTagPointer)
+        free(pTag);
+
+    return returnValue;
+
+    //<span style="color: rgb(0, 0, 0);
+    //    font-family: Verdana, Arial, Helvetica, sans-serif;
+    //    font-size: medium; font-style: normal;
+    //    font-variant: normal; font-weight: normal;
+    //    letter-spacing: normal;
+    //    line-height: 18px;
+    //    orphans: auto;
+    //    text-align: left;
+    //    text-indent: 0px;
+    //    text-transform: none;
+    //    white-space: normal;
+    //    widows: auto;
+    //    word-spacing: 0px;
+    //    -webkit-text-stroke-width: 0px;
+    //    background-color: rgb(255, 255, 255);
+    //    display: inline !important;
+    //    float: none;">intention o</span>
+}
+
 /* GenerateClipboardHtml()
  *
  * Generate HTML code in the CF_HTML clipboard format (not NUL terminated) from
