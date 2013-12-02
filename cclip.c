@@ -481,10 +481,14 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
         "EndFragment:0000000000\r\n<html>\r\n<body>\r\n<!--StartFragment-->";
     char *pEndString = "<!--EndFragment-->\r\n</body>\r\n</html>";
     char *pOutputBuffer;
+    unsigned int ouputBufWriteIndex = 0;
+    unsigned int outputBufRemainingBytes;
     unsigned int htmlSizeBytes;
     int iReturnedSize;
     // TODO implement GenerateClipboardHtml()
 
+    /* determine the size of the output buffer */
+    // TODO replace LF and CRLF with <br>
     iReturnedSize = WideCharToMultiByte(CP_UTF8, 0, pInputBuffer,
         inputBufSizeBytes / sizeof(wchar_t), NULL, 0, NULL, NULL);
     if (iReturnedSize == 0)
@@ -530,6 +534,7 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
         }
     }
 
+    outputBufRemainingBytes = htmlSizeBytes;
     pOutputBuffer = malloc(htmlSizeBytes);
     if (pOutputBuffer == NULL)
     {
@@ -543,8 +548,58 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
         return -1;
     }
 
-    // TODO fill buffer
-    // TODO correct EndHTML and EndFragment in the description
+    /* fill the output buffer */
+    iReturnedSize = (int)strlen(pStartString);
+    strncpy(pOutputBuffer + ouputBufWriteIndex, pStartString, iReturnedSize);
+    ouputBufWriteIndex += iReturnedSize;
+    outputBufRemainingBytes -= iReturnedSize;
+
+    if (pFormatInfo == NULL)
+    {
+        iReturnedSize = WideCharToMultiByte(CP_UTF8, 0, pInputBuffer,
+                inputBufSizeBytes / sizeof(wchar_t),
+                pOutputBuffer + ouputBufWriteIndex, outputBufRemainingBytes,
+                NULL, NULL);
+        if (iReturnedSize == 0)
+        {
+            if (pEb != NULL)
+            {
+                snprintf(pEb->errDescription, sizeof(pEb->errDescription),
+                    "WideCharToMultiByte() conversion failed, "
+                    "GetLastError() = 0x%X", GetLastError());
+                pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
+                pEb->functionSpecificErrorCode = 4;
+            }
+            free(pOutputBuffer);
+            return -1;
+        }
+        ouputBufWriteIndex += iReturnedSize;
+        outputBufRemainingBytes -= iReturnedSize;
+    }
+    else
+    {
+        unsigned int yExitLoop = 0;
+        while (!yExitLoop)
+        {
+            // TODO
+            //   find next tag position
+            //     --> when no more tags are found --> yExitLoop = 1
+            //   insert WideCharToMultiByte() converted text up to next tag
+            //   insert ALL tags at this position
+            //   possibly combine this with the code path where pFormatInfo==NULL
+        }
+    }
+
+    iReturnedSize = (int)strlen(pEndString);
+    strncpy(pOutputBuffer + ouputBufWriteIndex, pEndString, iReturnedSize);
+    ouputBufWriteIndex += iReturnedSize;
+    outputBufRemainingBytes -= iReturnedSize;
+
+    /* correct EndHTML and EndFragment in the description */
+    snprintf(pOutputBuffer + 0x2B, 10, "%010d", htmlSizeBytes);
+    snprintf(pOutputBuffer + 0x5D, 10, "%010d", htmlSizeBytes - 36);
+
+    // TODO sanity check: ouputBufWriteIndex and outputBufRemainingBytes
 
     /* success */
     *ppAllocatedHtmlBuffer = pOutputBuffer;
