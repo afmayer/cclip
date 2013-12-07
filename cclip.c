@@ -210,7 +210,6 @@ int ReadFileToNewBuffer(HANDLE fileHandle, unsigned int bufferSizeStep,
     return 0;
 }
 
-// TODO change ConvToZeroTerminatedWideCharNewBuffer() to not include a NUL terminator character, adapt main()
 /* ConvToZeroTerminatedWideCharNewBuffer()
  *
  * Convert a given string (not zero terminated) in a given codepage to a wide
