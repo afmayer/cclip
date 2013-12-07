@@ -457,11 +457,11 @@ int GenerateHtmlMarkupFromFormatInfoTag(TagType type, unsigned parameter,
 /* GenerateClipboardHtml()
  *
  * Generate HTML code in the CF_HTML clipboard format (not NUL terminated) from
- * a wide character input buffer and an optional FormatInfo structure and store
- * it in an allocated buffer. Stores the address of the allocated buffer (which
- * must be released by the caller) and the size of the allocated buffer in
- * output variables. When the FormatInfo pointer is NULL no formatting is
- * applied to the HTML output.
+ * a wide character input buffer (does not need to be zero terminated) and an
+ * optional FormatInfo structure and store it in an allocated buffer. Stores
+ * the address of the allocated buffer (which must be released by the caller)
+ * and the size of the allocated buffer in output variables. When the
+ * FormatInfo pointer is NULL no formatting is applied to the HTML output.
  *
  * Returns zero on success or -1 in case of an error. In case of an error
  * and when the error block pointer is not NULL the error block is filled with
@@ -480,14 +480,71 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
         "EndFragment:0000000000\r\n<html>\r\n<body>\r\n<!--StartFragment-->";
     char *pEndString = "<!--EndFragment-->\r\n</body>\r\n</html>";
     char *pOutputBuffer;
+    FormatInfo *pOwnFormatInfo;
     unsigned int ouputBufWriteIndex = 0;
     unsigned int outputBufRemainingBytes;
     unsigned int htmlSizeBytes;
+    unsigned int numberOfLineBreaks = 0;
+    unsigned int i;
+    unsigned int yExitLoop;
     int iReturnedSize;
-    // TODO zero terminate GenerateClipboardHtml() output
+    // TODO zero terminate GenerateClipboardHtml() output?
+
+    /* count CR, LF and CRLF occurrences (for <br> tag insertions) */
+    // TODO count CR, LF and CRLF
+    for (i = 0; i < inputBufSizeBytes / sizeof(wchar_t); i++)
+    {
+        if (pInputBuffer[i] == L'\r')
+        {
+            if (inputBufSizeBytes / sizeof(wchar_t) > i + 1
+                    && pInputBuffer[i+1] == L'\n')
+            {
+                i++;
+            }
+            numberOfLineBreaks++;
+        }
+        else if (pInputBuffer[i] == L'\n')
+        {
+            numberOfLineBreaks++;
+        }
+    }
+
+    /* create FormatInfo structure derived from pFormatInfo parameter */
+    pOwnFormatInfo = malloc(
+            /* space for FormatInfo structure without any tags */
+            sizeof(*pFormatInfo) - sizeof(pFormatInfo->tags) +
+            /* space for tags from pFormatInfo input parameter */
+            (pFormatInfo == NULL ? 0 : pFormatInfo->numberOfTags) *
+            sizeof(pFormatInfo->tags) +
+            /* space for additional <br> tags */
+            numberOfLineBreaks * sizeof(pFormatInfo->tags)
+        );
+    if (pOwnFormatInfo == NULL)
+    {
+        if (pEb != NULL)
+        {
+            snprintf(pEb->errDescription, sizeof(pEb->errDescription),
+                "Could not allocate buffer for FormatInfo structure");
+            pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
+            pEb->functionSpecificErrorCode = 1;
+        }
+        return -1;
+    }
+    pOwnFormatInfo->numberOfTags =
+            (pFormatInfo == NULL ? 0 : pFormatInfo->numberOfTags) +
+            numberOfLineBreaks;
+
+    if (pFormatInfo != NULL) // TODO remove this - FormatInfo tags must be sorted
+    {
+        memcpy(pOwnFormatInfo->tags, pFormatInfo->tags,
+            pFormatInfo->numberOfTags * sizeof(pFormatInfo->tags));
+    }
+
+    // TODO create FormatInfo structure derived from pFormatInfo parameter
+    //   --> insert <br> tags
+    //   --> insert <pre> tag around everything with a style attribute
 
     /* determine output size: input string as UTF8 */
-    // TODO replace LF and CRLF with <br>
     iReturnedSize = WideCharToMultiByte(CP_UTF8, 0, pInputBuffer,
         inputBufSizeBytes / sizeof(wchar_t), NULL, 0, NULL, NULL);
     if (iReturnedSize == 0)
@@ -498,23 +555,26 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
                 "WideCharToMultiByte() space detection failed, "
                 "GetLastError() = 0x%X", GetLastError());
             pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
-            pEb->functionSpecificErrorCode = 1;
+            pEb->functionSpecificErrorCode = 2;
         }
+        free(pOwnFormatInfo);
         return -1;
     }
     htmlSizeBytes = (unsigned int)iReturnedSize;
+
+    /* determine output size: description + fixed start and end HTML code */
     htmlSizeBytes += strlen(pStartString) + strlen(pEndString);
 
     /* determine output size: generated HTML tags */
-    if (pFormatInfo != NULL)
+    if (pOwnFormatInfo != NULL) // TODO remove this - pOwnFormatInfo is never NULL
     {
         unsigned int i;
-        for (i = 0; i < pFormatInfo->numberOfTags; i++)
+        for (i = 0; i < pOwnFormatInfo->numberOfTags; i++)
         {
             iReturnedSize = GenerateHtmlMarkupFromFormatInfoTag(
-                pFormatInfo->tags[i].type,
-                pFormatInfo->tags[i].parameter,
-                pFormatInfo->tags[i].yClose,
+                pOwnFormatInfo->tags[i].type,
+                pOwnFormatInfo->tags[i].parameter,
+                pOwnFormatInfo->tags[i].yClose,
                 NULL,
                 0);
             if (iReturnedSize == -1)
@@ -523,11 +583,12 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
                 {
                     snprintf(pEb->errDescription, sizeof(pEb->errDescription),
                         "Could not generate HTML for tag type 0x%X with "
-                        "parameter 0x%X", pFormatInfo->tags[i].type,
-                        pFormatInfo->tags[i].parameter);
+                        "parameter 0x%X", pOwnFormatInfo->tags[i].type,
+                        pOwnFormatInfo->tags[i].parameter);
                     pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
-                    pEb->functionSpecificErrorCode = 2;
+                    pEb->functionSpecificErrorCode = 3;
                 }
+                free(pOwnFormatInfo);
                 return -1;
             }
             htmlSizeBytes += (unsigned int)iReturnedSize;
@@ -544,8 +605,9 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
             snprintf(pEb->errDescription, sizeof(pEb->errDescription),
                 "Could not allocate buffer for HTML data");
             pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
-            pEb->functionSpecificErrorCode = 3;
+            pEb->functionSpecificErrorCode = 4;
         }
+        free(pOwnFormatInfo);
         return -1;
     }
 
@@ -555,8 +617,15 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
     ouputBufWriteIndex += iReturnedSize;
     outputBufRemainingBytes -= iReturnedSize;
 
-    if (pFormatInfo == NULL)
+    yExitLoop = 0;
+    while (!yExitLoop)
     {
+        yExitLoop = 1;
+        // TODO
+        //   find next tag position in pOwnFormatInfo
+        //     --> when no more tags are found --> yExitLoop = 1
+        //   insert WideCharToMultiByte() converted text up to next tag
+        //   insert ALL tags at this position
         iReturnedSize = WideCharToMultiByte(CP_UTF8, 0, pInputBuffer,
                 inputBufSizeBytes / sizeof(wchar_t),
                 pOutputBuffer + ouputBufWriteIndex, outputBufRemainingBytes,
@@ -569,27 +638,18 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
                     "WideCharToMultiByte() conversion failed, "
                     "GetLastError() = 0x%X", GetLastError());
                 pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
-                pEb->functionSpecificErrorCode = 4;
+                pEb->functionSpecificErrorCode = 5;
             }
             free(pOutputBuffer);
+            free(pOwnFormatInfo);
             return -1;
         }
         ouputBufWriteIndex += iReturnedSize;
         outputBufRemainingBytes -= iReturnedSize;
     }
-    else
-    {
-        unsigned int yExitLoop = 0;
-        while (!yExitLoop)
-        {
-            // TODO
-            //   find next tag position
-            //     --> when no more tags are found --> yExitLoop = 1
-            //   insert WideCharToMultiByte() converted text up to next tag
-            //   insert ALL tags at this position
-            //   possibly combine this with the code path where pFormatInfo==NULL
-        }
-    }
+
+    /* the FormatInfo structure is not needed anymore */
+    free(pOwnFormatInfo);
 
     /* fill buffer: <!--EndFragment--> and closing HTML tags */
     iReturnedSize = (int)strlen(pEndString);
