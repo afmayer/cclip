@@ -485,9 +485,9 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
     unsigned int outputBufRemainingBytes;
     unsigned int htmlSizeBytes;
     int iReturnedSize;
-    // TODO implement GenerateClipboardHtml()
+    // TODO zero terminate GenerateClipboardHtml() output
 
-    /* determine the size of the output buffer */
+    /* determine output size: input string as UTF8 */
     // TODO replace LF and CRLF with <br>
     iReturnedSize = WideCharToMultiByte(CP_UTF8, 0, pInputBuffer,
         inputBufSizeBytes / sizeof(wchar_t), NULL, 0, NULL, NULL);
@@ -506,6 +506,7 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
     htmlSizeBytes = (unsigned int)iReturnedSize;
     htmlSizeBytes += strlen(pStartString) + strlen(pEndString);
 
+    /* determine output size: generated HTML tags */
     if (pFormatInfo != NULL)
     {
         unsigned int i;
@@ -534,6 +535,7 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
         }
     }
 
+    /* allocate the output buffer */
     outputBufRemainingBytes = htmlSizeBytes;
     pOutputBuffer = malloc(htmlSizeBytes);
     if (pOutputBuffer == NULL)
@@ -548,7 +550,7 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
         return -1;
     }
 
-    /* fill the output buffer */
+    /* fill buffer: description and HTML until <!--StartFragment--> */
     iReturnedSize = (int)strlen(pStartString);
     strncpy(pOutputBuffer + ouputBufWriteIndex, pStartString, iReturnedSize);
     ouputBufWriteIndex += iReturnedSize;
@@ -590,6 +592,7 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
         }
     }
 
+    /* fill buffer: <!--EndFragment--> and closing HTML tags */
     iReturnedSize = (int)strlen(pEndString);
     strncpy(pOutputBuffer + ouputBufWriteIndex, pEndString, iReturnedSize);
     ouputBufWriteIndex += iReturnedSize;
