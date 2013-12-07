@@ -33,6 +33,7 @@ typedef struct ErrBlock_
 
 typedef enum TagType_
 {
+    TagTypeLineBreak,
     TagTypeUnderscore,
     TagTypeFgBlue,
     TagTypeFgGreen,
@@ -404,7 +405,11 @@ int GenerateHtmlMarkupFromFormatInfoTag(TagType type, unsigned parameter,
     char *pTag = NULL;
     unsigned int yFreeTagPointer = 0;
 
-    if (type == TagTypeUnderscore)
+    if (type == TagTypeLineBreak)
+    {
+        pTag = "<br>";
+    }
+    else if (type == TagTypeUnderscore)
     {
         if (!yClose)
             pTag = "<u>";
