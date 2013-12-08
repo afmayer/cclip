@@ -33,7 +33,6 @@ typedef struct ErrBlock_
 
 typedef enum TagType_
 {
-    TagTypeLineBreak,
     TagTypePreWithAttributes,
     TagTypeUnderscore,
     TagTypeFgBlue,
@@ -406,11 +405,7 @@ int GenerateHtmlMarkupFromFormatInfoTag(TagType type, unsigned parameter,
     char *pTag = NULL;
     unsigned int yFreeTagPointer = 0;
 
-    if (type == TagTypeLineBreak)
-    {
-        pTag = "<br>";
-    }
-    else if (type == TagTypePreWithAttributes)
+    if (type == TagTypePreWithAttributes)
     {
         if (!yClose)
             pTag = "<pre>";
@@ -501,35 +496,14 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
     unsigned int outputBufWriteIndex = 0;
     unsigned int outputBufRemainingBytes;
     unsigned int htmlSizeBytes;
-    unsigned int numberOfLineBreaks = 0;
     unsigned int i;
     int iReturnedSize;
     // TODO zero terminate GenerateClipboardHtml() output?
-
-    /* count CR, LF and CRLF occurrences (for <br> tag insertions) */
-    for (i = 0; i < inputBufSizeBytes / sizeof(wchar_t); i++)
-    {
-        if (pInputBuffer[i] == L'\r')
-        {
-            numberOfLineBreaks++;
-            if (inputBufSizeBytes / sizeof(wchar_t) > i + 1
-                    && pInputBuffer[i+1] == L'\n')
-            {
-                i++;
-            }
-        }
-        else if (pInputBuffer[i] == L'\n')
-        {
-            numberOfLineBreaks++;
-        }
-    }
 
     /* create FormatInfo structure derived from pFormatInfo parameter */
     formatInfoTotalTags = (
             /* tags from pFormatInfo input parameter */
             (pFormatInfo == NULL ? 0 : pFormatInfo->numberOfTags) +
-            /* additional <br> tags */
-            numberOfLineBreaks +
             /* opening and closing <pre> tag */
             2);
     pOwnFormatInfo = malloc(
@@ -564,43 +538,6 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
         memcpy(&(pOwnFormatInfo->tags[formatInfoTagIndex]), pFormatInfo->tags,
             pFormatInfo->numberOfTags * sizeof(pFormatInfo->tags));
         formatInfoTagIndex += pFormatInfo->numberOfTags;
-    }
-
-    /* insert <br> tags at the end of the FormatInfo structure */
-    for (i = 0; i < inputBufSizeBytes / sizeof(wchar_t); i++)
-    {
-        unsigned int yFoundLineBreak = 0;
-        unsigned int lineBreakPosition;
-
-        if (numberOfLineBreaks == 0)
-            break;
-
-        if (pInputBuffer[i] == L'\r')
-        {
-            yFoundLineBreak = 1;
-            lineBreakPosition = i;
-            if (inputBufSizeBytes / sizeof(wchar_t) > i + 1
-                    && pInputBuffer[i+1] == L'\n')
-            {
-                i++;
-            }
-        }
-        else if (pInputBuffer[i] == L'\n')
-        {
-            yFoundLineBreak = 1;
-            lineBreakPosition = i;
-        }
-
-        if (yFoundLineBreak)
-        {
-            pOwnFormatInfo->tags[formatInfoTagIndex].characterPos =
-                lineBreakPosition;
-            pOwnFormatInfo->tags[formatInfoTagIndex].type = TagTypeLineBreak;
-            pOwnFormatInfo->tags[formatInfoTagIndex].parameter = 0;
-            pOwnFormatInfo->tags[formatInfoTagIndex].yClose = 0;
-            formatInfoTagIndex++;
-            numberOfLineBreaks--;
-        }
     }
 
     /* insert <pre> tag around everything (close) */
