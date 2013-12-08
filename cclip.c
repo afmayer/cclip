@@ -385,6 +385,20 @@ int WriteToClipboard(unsigned int format, const void *pData,
     return 0;
 }
 
+// TODO ReplaceCharacters() documentation
+int ReplaceCharacters(const wchar_t *pInputBuffer,
+                      unsigned int inputBufSizeBytes,
+                      FormatInfo *pFormatInfo,
+                      const wchar_t **ppSearchStrings,
+                      const wchar_t **ppReplaceStrings,
+                      char **ppAllocatedHtmlBuffer,
+                      unsigned int *pAllocatedHtmlBufSizeBytes,
+                      ErrBlock *pEb)
+{
+    // TODO implement ReplaceCharacters()
+    return -1;
+}
+
 /* GenerateHtmlMarkupFromFormatInfoTag()
  *
  * Generate HTML code in UTF8 (without a zero termination byte) from a TagType,
@@ -561,6 +575,12 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
         free(pOwnFormatInfo);
         return -1;
     }
+
+    // TODO replace HTML characters, and optionally linefeeds with <br>
+    //  "   ==>  &quot;     &#34;
+    //  &   ==>  &amp;      &#38;
+    //  <   ==>  &lt;       &#60;
+    //  >   ==>  &gt;       &#62;
 
     /* determine output size: input string as UTF8 */
     iReturnedSize = WideCharToMultiByte(CP_UTF8, 0, pInputBuffer,
