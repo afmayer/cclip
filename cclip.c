@@ -486,6 +486,7 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
     char *pEndString = "<!--EndFragment-->\r\n</body>\r\n</html>";
     char *pOutputBuffer;
     FormatInfo *pOwnFormatInfo;
+    unsigned int formatInfoTagIndex = 0;
     unsigned int inputCharacterPos = 0;
     unsigned int nextTagSearchStartPos = 0;
     unsigned int outputBufWriteIndex = 0;
@@ -522,8 +523,7 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
             (pFormatInfo == NULL ? 0 : pFormatInfo->numberOfTags) *
             sizeof(pFormatInfo->tags) +
             /* space for additional <br> tags */
-            numberOfLineBreaks * sizeof(pFormatInfo->tags)
-        );
+            numberOfLineBreaks * sizeof(pFormatInfo->tags));
     if (pOwnFormatInfo == NULL)
     {
         if (pEb != NULL)
@@ -539,10 +539,49 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
             (pFormatInfo == NULL ? 0 : pFormatInfo->numberOfTags) +
             numberOfLineBreaks;
 
-    if (pFormatInfo != NULL) // TODO remove this - FormatInfo tags must be sorted
+    /* copy tags from pFormatInfo input parameter */
+    if (pFormatInfo != NULL)
     {
-        memcpy(pOwnFormatInfo->tags, pFormatInfo->tags,
+        memcpy(&(pOwnFormatInfo->tags[formatInfoTagIndex]), pFormatInfo->tags,
             pFormatInfo->numberOfTags * sizeof(pFormatInfo->tags));
+        formatInfoTagIndex += pFormatInfo->numberOfTags;
+    }
+
+    /* insert <br> tags at the end of the FormatInfo structure */
+    for (i = 0; i < inputBufSizeBytes / sizeof(wchar_t); i++)
+    {
+        unsigned int yFoundLineBreak = 0;
+        unsigned int lineBreakPosition;
+
+        if (numberOfLineBreaks == 0)
+            break;
+
+        if (pInputBuffer[i] == L'\r')
+        {
+            yFoundLineBreak = 1;
+            lineBreakPosition = i;
+            if (inputBufSizeBytes / sizeof(wchar_t) > i + 1
+                    && pInputBuffer[i+1] == L'\n')
+            {
+                i++;
+            }
+        }
+        else if (pInputBuffer[i] == L'\n')
+        {
+            yFoundLineBreak = 1;
+            lineBreakPosition = i;
+        }
+
+        if (yFoundLineBreak)
+        {
+            pOwnFormatInfo->tags[formatInfoTagIndex].characterPos =
+                lineBreakPosition;
+            pOwnFormatInfo->tags[formatInfoTagIndex].type = TagTypeLineBreak;
+            pOwnFormatInfo->tags[formatInfoTagIndex].parameter = 0;
+            pOwnFormatInfo->tags[formatInfoTagIndex].yClose = 0;
+            formatInfoTagIndex++;
+            numberOfLineBreaks--;
+        }
     }
 
     // TODO create FormatInfo structure derived from pFormatInfo parameter
