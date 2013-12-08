@@ -493,7 +493,6 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
     unsigned int htmlSizeBytes;
     unsigned int numberOfLineBreaks = 0;
     unsigned int i;
-    unsigned int yExitBufferFillLoop = 0;
     int iReturnedSize;
     // TODO zero terminate GenerateClipboardHtml() output?
 
@@ -619,7 +618,7 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
     outputBufWriteIndex += iReturnedSize;
     outputBufRemainingBytes -= iReturnedSize;
 
-    while (!yExitBufferFillLoop)
+    while (1)
     {
         unsigned int yFoundNextTag = 0;
         unsigned int nextTagCharacter;
@@ -628,7 +627,7 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
         nextTagCharacter = inputBufSizeBytes / sizeof(wchar_t);
         for (i = 0; i < pOwnFormatInfo->numberOfTags; i++)
         {
-            if (pOwnFormatInfo->tags[i].characterPos < nextTagCharacter &&
+            if (pOwnFormatInfo->tags[i].characterPos <= nextTagCharacter &&
                 pOwnFormatInfo->tags[i].characterPos >= nextTagSearchStartPos)
             {
                 nextTagCharacter = pOwnFormatInfo->tags[i].characterPos;
@@ -647,7 +646,6 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
             /* convert all remaining input characters */
             inputCharsToConvert =
                 (inputBufSizeBytes / sizeof(wchar_t)) - inputCharacterPos;
-            yExitBufferFillLoop = 1;
         }
 
         /* fill buffer: convert input characters */
@@ -675,6 +673,10 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
             outputBufRemainingBytes -= iReturnedSize;
         }
         inputCharacterPos += inputCharsToConvert;
+
+        /* exit the loop if there are no more tags to write */
+        if (!yFoundNextTag)
+            break;
 
         /* fill buffer: insert all tags at that position */
         for (i = 0; i < pOwnFormatInfo->numberOfTags; i++)
