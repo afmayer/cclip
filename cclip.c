@@ -488,7 +488,7 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
     FormatInfo *pOwnFormatInfo;
     unsigned int inputCharacterPos = 0;
     unsigned int nextTagSearchStartPos = 0;
-    unsigned int ouputBufWriteIndex = 0;
+    unsigned int outputBufWriteIndex = 0;
     unsigned int outputBufRemainingBytes;
     unsigned int htmlSizeBytes;
     unsigned int numberOfLineBreaks = 0;
@@ -548,7 +548,7 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
 
     // TODO create FormatInfo structure derived from pFormatInfo parameter
     //   --> insert <br> tags
-    //   --> insert <pre> tag around everything with a style attribute
+    //   --> insert <pre style="xyz"> tag around everything
 
     /* determine output size: input string as UTF8 */
     iReturnedSize = WideCharToMultiByte(CP_UTF8, 0, pInputBuffer,
@@ -615,8 +615,8 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
 
     /* fill buffer: description and HTML until <!--StartFragment--> */
     iReturnedSize = (int)strlen(pStartString);
-    strncpy(pOutputBuffer + ouputBufWriteIndex, pStartString, iReturnedSize);
-    ouputBufWriteIndex += iReturnedSize;
+    strncpy(pOutputBuffer + outputBufWriteIndex, pStartString, iReturnedSize);
+    outputBufWriteIndex += iReturnedSize;
     outputBufRemainingBytes -= iReturnedSize;
 
     while (!yExitBufferFillLoop)
@@ -655,7 +655,7 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
         {
             iReturnedSize = WideCharToMultiByte(CP_UTF8, 0, pInputBuffer +
                     inputCharacterPos, inputCharsToConvert, pOutputBuffer +
-                    ouputBufWriteIndex, outputBufRemainingBytes, NULL, NULL);
+                    outputBufWriteIndex, outputBufRemainingBytes, NULL, NULL);
             if (iReturnedSize == 0)
             {
                 if (pEb != NULL)
@@ -671,7 +671,7 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
                 free(pOwnFormatInfo);
                 return -1;
             }
-            ouputBufWriteIndex += iReturnedSize;
+            outputBufWriteIndex += iReturnedSize;
             outputBufRemainingBytes -= iReturnedSize;
         }
         inputCharacterPos += inputCharsToConvert;
@@ -685,7 +685,7 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
                         pOwnFormatInfo->tags[i].type,
                         pOwnFormatInfo->tags[i].parameter,
                         pOwnFormatInfo->tags[i].yClose,
-                        pOutputBuffer + ouputBufWriteIndex,
+                        pOutputBuffer + outputBufWriteIndex,
                         outputBufRemainingBytes);
                 if (iReturnedSize == -1)
                 {
@@ -705,15 +705,10 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
                     free(pOwnFormatInfo);
                     return -1;
                 }
-                ouputBufWriteIndex += iReturnedSize;
+                outputBufWriteIndex += iReturnedSize;
                 outputBufRemainingBytes -= iReturnedSize;
             }
         }
-        // TODO
-        //   find next tag position in pOwnFormatInfo
-        //     --> when no more tags are found --> yExitBufferFillLoop = 1
-        //   insert WideCharToMultiByte() converted text up to next tag
-        //   insert ALL tags at this position
     }
 
     /* the FormatInfo structure is not needed anymore */
@@ -721,15 +716,26 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
 
     /* fill buffer: <!--EndFragment--> and closing HTML tags */
     iReturnedSize = (int)strlen(pEndString);
-    strncpy(pOutputBuffer + ouputBufWriteIndex, pEndString, iReturnedSize);
-    ouputBufWriteIndex += iReturnedSize;
+    strncpy(pOutputBuffer + outputBufWriteIndex, pEndString, iReturnedSize);
+    outputBufWriteIndex += iReturnedSize;
     outputBufRemainingBytes -= iReturnedSize;
 
     /* correct EndHTML and EndFragment in the description */
     snprintf(pOutputBuffer + 0x2B, 10, "%010d", htmlSizeBytes);
     snprintf(pOutputBuffer + 0x5D, 10, "%010d", htmlSizeBytes - 36);
 
-    // TODO sanity check: ouputBufWriteIndex and outputBufRemainingBytes
+    if (outputBufWriteIndex != htmlSizeBytes || outputBufRemainingBytes != 0)
+    {
+        if (pEb != NULL)
+        {
+            snprintf(pEb->errDescription, sizeof(pEb->errDescription),
+                "Error in internal size calculation");
+            pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
+            pEb->functionSpecificErrorCode = 7;
+        }
+        free(pOutputBuffer);
+        return -1;
+    }
 
     /* success */
     *ppAllocatedHtmlBuffer = pOutputBuffer;
