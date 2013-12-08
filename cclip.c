@@ -34,6 +34,7 @@ typedef struct ErrBlock_
 typedef enum TagType_
 {
     TagTypeLineBreak,
+    TagTypePreWithAttributes,
     TagTypeUnderscore,
     TagTypeFgBlue,
     TagTypeFgGreen,
@@ -409,6 +410,13 @@ int GenerateHtmlMarkupFromFormatInfoTag(TagType type, unsigned parameter,
     {
         pTag = "<br>";
     }
+    else if (type == TagTypePreWithAttributes)
+    {
+        if (!yClose)
+            pTag = "<pre>";
+        else
+            pTag = "</pre>";
+    }
     else if (type == TagTypeUnderscore)
     {
         if (!yClose)
@@ -486,6 +494,7 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
     char *pEndString = "<!--EndFragment-->\r\n</body>\r\n</html>";
     char *pOutputBuffer;
     FormatInfo *pOwnFormatInfo;
+    unsigned int formatInfoTotalTags;
     unsigned int formatInfoTagIndex = 0;
     unsigned int inputCharacterPos = 0;
     unsigned int nextTagSearchStartPos = 0;
@@ -516,14 +525,18 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
     }
 
     /* create FormatInfo structure derived from pFormatInfo parameter */
+    formatInfoTotalTags = (
+            /* tags from pFormatInfo input parameter */
+            (pFormatInfo == NULL ? 0 : pFormatInfo->numberOfTags) +
+            /* additional <br> tags */
+            numberOfLineBreaks +
+            /* opening and closing <pre> tag */
+            2);
     pOwnFormatInfo = malloc(
             /* space for FormatInfo structure without any tags */
             sizeof(*pFormatInfo) - sizeof(pFormatInfo->tags) +
-            /* space for tags from pFormatInfo input parameter */
-            (pFormatInfo == NULL ? 0 : pFormatInfo->numberOfTags) *
-            sizeof(pFormatInfo->tags) +
-            /* space for additional <br> tags */
-            numberOfLineBreaks * sizeof(pFormatInfo->tags));
+            /* space for tags */
+            formatInfoTotalTags * sizeof(pFormatInfo->tags));
     if (pOwnFormatInfo == NULL)
     {
         if (pEb != NULL)
@@ -535,11 +548,15 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
         }
         return -1;
     }
-    pOwnFormatInfo->numberOfTags =
-            (pFormatInfo == NULL ? 0 : pFormatInfo->numberOfTags) +
-            numberOfLineBreaks;
+    pOwnFormatInfo->numberOfTags = formatInfoTotalTags;
 
-    // TODO insert <pre style="xyz"> tag around everything (opening tag)
+    /* insert <pre> tag around everything (open) */
+    pOwnFormatInfo->tags[formatInfoTagIndex].characterPos = 0;
+    pOwnFormatInfo->tags[formatInfoTagIndex].type = TagTypePreWithAttributes;
+    pOwnFormatInfo->tags[formatInfoTagIndex].parameter = 0;
+    pOwnFormatInfo->tags[formatInfoTagIndex].yClose = 0;
+    formatInfoTagIndex++;
+    // TODO set attributes for <pre> tag
 
     /* copy tags from pFormatInfo input parameter */
     if (pFormatInfo != NULL)
@@ -586,7 +603,27 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
         }
     }
 
-    // TODO insert <pre style="xyz"> tag around everything (closing tag)
+    /* insert <pre> tag around everything (close) */
+    pOwnFormatInfo->tags[formatInfoTagIndex].characterPos =
+        inputBufSizeBytes / sizeof(wchar_t);
+    pOwnFormatInfo->tags[formatInfoTagIndex].type = TagTypePreWithAttributes;
+    pOwnFormatInfo->tags[formatInfoTagIndex].parameter = 0;
+    pOwnFormatInfo->tags[formatInfoTagIndex].yClose = 1;
+    formatInfoTagIndex++;
+
+    /* sanity check: FormatInfo structure filled correctly? */
+    if (formatInfoTagIndex != formatInfoTotalTags)
+    {
+        if (pEb != NULL)
+        {
+            snprintf(pEb->errDescription, sizeof(pEb->errDescription),
+                "Error in internal FormatInfo size calculation");
+            pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
+            pEb->functionSpecificErrorCode = 2;
+        }
+        free(pOwnFormatInfo);
+        return -1;
+    }
 
     /* determine output size: input string as UTF8 */
     iReturnedSize = WideCharToMultiByte(CP_UTF8, 0, pInputBuffer,
@@ -599,7 +636,7 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
                 "WideCharToMultiByte() space detection failed, "
                 "GetLastError() = 0x%X", GetLastError());
             pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
-            pEb->functionSpecificErrorCode = 2;
+            pEb->functionSpecificErrorCode = 3;
         }
         free(pOwnFormatInfo);
         return -1;
@@ -627,7 +664,7 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
                     "parameter 0x%X failed", pOwnFormatInfo->tags[i].type,
                     pOwnFormatInfo->tags[i].parameter);
                 pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
-                pEb->functionSpecificErrorCode = 3;
+                pEb->functionSpecificErrorCode = 4;
             }
             free(pOwnFormatInfo);
             return -1;
@@ -645,7 +682,7 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
             snprintf(pEb->errDescription, sizeof(pEb->errDescription),
                 "Could not allocate buffer for HTML data");
             pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
-            pEb->functionSpecificErrorCode = 4;
+            pEb->functionSpecificErrorCode = 5;
         }
         free(pOwnFormatInfo);
         return -1;
@@ -702,7 +739,7 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
                         "GetLastError() = 0x%X", GetLastError());
                     pEb->errDescription[
                         sizeof(pEb->errDescription) - 1] = '\0';
-                    pEb->functionSpecificErrorCode = 5;
+                    pEb->functionSpecificErrorCode = 6;
                 }
                 free(pOutputBuffer);
                 free(pOwnFormatInfo);
@@ -740,7 +777,7 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
                             pOwnFormatInfo->tags[i].parameter);
                         pEb->errDescription[
                             sizeof(pEb->errDescription) - 1] = '\0';
-                        pEb->functionSpecificErrorCode = 6;
+                        pEb->functionSpecificErrorCode = 7;
                     }
                     free(pOutputBuffer);
                     free(pOwnFormatInfo);
@@ -765,14 +802,15 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
     snprintf(pOutputBuffer + 0x2B, 10, "%010d", htmlSizeBytes);
     snprintf(pOutputBuffer + 0x5D, 10, "%010d", htmlSizeBytes - 36);
 
+    /* sanity check: buffer filled exactly to the end? */
     if (outputBufWriteIndex != htmlSizeBytes || outputBufRemainingBytes != 0)
     {
         if (pEb != NULL)
         {
             snprintf(pEb->errDescription, sizeof(pEb->errDescription),
-                "Error in internal size calculation");
+                "Error in internal buffer size calculation");
             pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
-            pEb->functionSpecificErrorCode = 7;
+            pEb->functionSpecificErrorCode = 8;
         }
         free(pOutputBuffer);
         return -1;
