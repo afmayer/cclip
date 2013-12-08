@@ -486,6 +486,8 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
     char *pEndString = "<!--EndFragment-->\r\n</body>\r\n</html>";
     char *pOutputBuffer;
     FormatInfo *pOwnFormatInfo;
+    unsigned int inputCharacterPos = 0;
+    unsigned int nextTagSearchStartPos = 0;
     unsigned int ouputBufWriteIndex = 0;
     unsigned int outputBufRemainingBytes;
     unsigned int htmlSizeBytes;
@@ -496,7 +498,6 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
     // TODO zero terminate GenerateClipboardHtml() output?
 
     /* count CR, LF and CRLF occurrences (for <br> tag insertions) */
-    // TODO count CR, LF and CRLF
     for (i = 0; i < inputBufSizeBytes / sizeof(wchar_t); i++)
     {
         if (pInputBuffer[i] == L'\r')
@@ -620,51 +621,41 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
 
     while (!yExitBufferFillLoop)
     {
-        unsigned int characterPos;
-        for (characterPos = 0; characterPos <= inputBufSizeBytes /
-                sizeof(wchar_t); characterPos++)
+        unsigned int yFoundNextTag = 0;
+        unsigned int nextTagCharacter;
+        unsigned int inputCharsToConvert;
+
+        nextTagCharacter = inputBufSizeBytes / sizeof(wchar_t);
+        for (i = 0; i < pOwnFormatInfo->numberOfTags; i++)
         {
-            unsigned int j;
-            for (j = 0; j < pOwnFormatInfo->numberOfTags; j++)
+            if (pOwnFormatInfo->tags[i].characterPos < nextTagCharacter &&
+                pOwnFormatInfo->tags[i].characterPos >= nextTagSearchStartPos)
             {
-                if (pOwnFormatInfo->tags[j].characterPos == characterPos)
-                {
-                    iReturnedSize = GenerateHtmlMarkupFromFormatInfoTag(
-                            pOwnFormatInfo->tags[j].type,
-                            pOwnFormatInfo->tags[j].parameter,
-                            pOwnFormatInfo->tags[j].yClose,
-                            pOutputBuffer + ouputBufWriteIndex,
-                            outputBufRemainingBytes);
-                    if (iReturnedSize == -1)
-                    {
-                        if (pEb != NULL)
-                        {
-                            snprintf(pEb->errDescription,
-                                sizeof(pEb->errDescription),
-                                "HTML tag generation for tag type 0x%X with "
-                                "parameter 0x%X failed",
-                                pOwnFormatInfo->tags[i].type,
-                                pOwnFormatInfo->tags[i].parameter);
-                            pEb->errDescription[
-                                sizeof(pEb->errDescription) - 1] = '\0';
-                            pEb->functionSpecificErrorCode = 5;
-                        }
-                        free(pOutputBuffer);
-                        free(pOwnFormatInfo);
-                        return -1;
-                    }
-                    ouputBufWriteIndex += iReturnedSize;
-                    outputBufRemainingBytes -= iReturnedSize;
-                }
+                nextTagCharacter = pOwnFormatInfo->tags[i].characterPos;
+                yFoundNextTag = 1;
             }
+        }
 
-            if (characterPos == inputBufSizeBytes / sizeof(wchar_t))
-                break;
+        if (yFoundNextTag)
+        {
+            /* convert input characters up to next tag */
+            inputCharsToConvert = nextTagCharacter - inputCharacterPos;
+            nextTagSearchStartPos = nextTagCharacter + 1;
+        }
+        else
+        {
+            /* convert all remaining input characters */
+            inputCharsToConvert =
+                (inputBufSizeBytes / sizeof(wchar_t)) - inputCharacterPos;
+            yExitBufferFillLoop = 1;
+        }
 
-            /* insert 1 character */
+        /* fill buffer: convert input characters */
+        if (inputCharsToConvert != 0)
+        {
             iReturnedSize = WideCharToMultiByte(CP_UTF8, 0, pInputBuffer +
-                    characterPos, 1, pOutputBuffer + ouputBufWriteIndex,
-                    outputBufRemainingBytes, NULL, NULL);
+                    inputCharacterPos, inputCharsToConvert, pOutputBuffer +
+                    ouputBufWriteIndex, outputBufRemainingBytes, NULL, NULL);
             if (iReturnedSize == 0)
             {
                 if (pEb != NULL)
@@ -683,7 +674,41 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
             ouputBufWriteIndex += iReturnedSize;
             outputBufRemainingBytes -= iReturnedSize;
         }
-        yExitBufferFillLoop = 1;
+        inputCharacterPos += inputCharsToConvert;
+
+        /* fill buffer: insert all tags at that position */
+        for (i = 0; i < pOwnFormatInfo->numberOfTags; i++)
+        {
+            if (pOwnFormatInfo->tags[i].characterPos == inputCharacterPos)
+            {
+                iReturnedSize = GenerateHtmlMarkupFromFormatInfoTag(
+                        pOwnFormatInfo->tags[i].type,
+                        pOwnFormatInfo->tags[i].parameter,
+                        pOwnFormatInfo->tags[i].yClose,
+                        pOutputBuffer + ouputBufWriteIndex,
+                        outputBufRemainingBytes);
+                if (iReturnedSize == -1)
+                {
+                    if (pEb != NULL)
+                    {
+                        snprintf(pEb->errDescription,
+                            sizeof(pEb->errDescription),
+                            "HTML tag generation for tag type 0x%X with "
+                            "parameter 0x%X failed",
+                            pOwnFormatInfo->tags[i].type,
+                            pOwnFormatInfo->tags[i].parameter);
+                        pEb->errDescription[
+                            sizeof(pEb->errDescription) - 1] = '\0';
+                        pEb->functionSpecificErrorCode = 5;
+                    }
+                    free(pOutputBuffer);
+                    free(pOwnFormatInfo);
+                    return -1;
+                }
+                ouputBufWriteIndex += iReturnedSize;
+                outputBufRemainingBytes -= iReturnedSize;
+            }
+        }
         // TODO
         //   find next tag position in pOwnFormatInfo
         //     --> when no more tags are found --> yExitBufferFillLoop = 1
