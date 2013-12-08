@@ -665,7 +665,7 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
                         "GetLastError() = 0x%X", GetLastError());
                     pEb->errDescription[
                         sizeof(pEb->errDescription) - 1] = '\0';
-                    pEb->functionSpecificErrorCode = 6;
+                    pEb->functionSpecificErrorCode = 5;
                 }
                 free(pOutputBuffer);
                 free(pOwnFormatInfo);
@@ -699,7 +699,7 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
                             pOwnFormatInfo->tags[i].parameter);
                         pEb->errDescription[
                             sizeof(pEb->errDescription) - 1] = '\0';
-                        pEb->functionSpecificErrorCode = 5;
+                        pEb->functionSpecificErrorCode = 6;
                     }
                     free(pOutputBuffer);
                     free(pOwnFormatInfo);
