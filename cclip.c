@@ -502,12 +502,12 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
     {
         if (pInputBuffer[i] == L'\r')
         {
+            numberOfLineBreaks++;
             if (inputBufSizeBytes / sizeof(wchar_t) > i + 1
                     && pInputBuffer[i+1] == L'\n')
             {
                 i++;
             }
-            numberOfLineBreaks++;
         }
         else if (pInputBuffer[i] == L'\n')
         {
@@ -538,6 +538,8 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
     pOwnFormatInfo->numberOfTags =
             (pFormatInfo == NULL ? 0 : pFormatInfo->numberOfTags) +
             numberOfLineBreaks;
+
+    // TODO insert <pre style="xyz"> tag around everything (opening tag)
 
     /* copy tags from pFormatInfo input parameter */
     if (pFormatInfo != NULL)
@@ -584,9 +586,7 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
         }
     }
 
-    // TODO create FormatInfo structure derived from pFormatInfo parameter
-    //   --> insert <br> tags
-    //   --> insert <pre style="xyz"> tag around everything
+    // TODO insert <pre style="xyz"> tag around everything (closing tag)
 
     /* determine output size: input string as UTF8 */
     iReturnedSize = WideCharToMultiByte(CP_UTF8, 0, pInputBuffer,
