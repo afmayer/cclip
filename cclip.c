@@ -385,6 +385,51 @@ int WriteToClipboard(unsigned int format, const void *pData,
     return 0;
 }
 
+/* SearchForStringList()
+ *
+ * Search for the first occurrence of any of an array of strings within a given
+ * input string. Earlier entries in the array of search strings take higher
+ * priority.
+ *
+ * Returns the character index (within the input string) of the first
+ * occurrence of a found string. Returns -1 if none of the strings was found.
+ * Stores the index of the search string within the given array of search
+ * strings in an output variable if a string is found, otherwise the value of
+ * the output pointer is undefined.
+ */
+int SearchForStringList(const wchar_t *pInputString,
+                        unsigned int inputStringSizeBytes,
+                        const wchar_t **ppSearchStrings,
+                        unsigned int numberOfSearchStrings,
+                        unsigned int *pHitSearchStringIndex)
+{
+    unsigned int i;
+    unsigned int charPos = 0;
+
+    for (charPos = 0; charPos < inputStringSizeBytes / sizeof(wchar_t);
+        charPos++)
+    {
+        for (i = 0; i < numberOfSearchStrings; i++)
+        {
+            unsigned int cmpPos = 0;
+            while (ppSearchStrings[i][cmpPos] == pInputString[charPos+cmpPos]
+                && charPos + cmpPos < inputStringSizeBytes / sizeof(wchar_t))
+            {
+                cmpPos++;
+            }
+            if (ppSearchStrings[i][cmpPos] == L'\0')
+            {
+                /* found a search string */
+                *pHitSearchStringIndex = i;
+                return charPos;
+            }
+        }
+    }
+
+    /* none of the search strings was found */
+    return -1;
+}
+
 // TODO ReplaceCharacters() documentation
 int ReplaceCharacters(const wchar_t *pInputBuffer,
                       unsigned int inputBufSizeBytes,
