@@ -436,12 +436,61 @@ int ReplaceCharacters(const wchar_t *pInputBuffer,
                       FormatInfo *pFormatInfo,
                       const wchar_t **ppSearchStrings,
                       const wchar_t **ppReplaceStrings,
-                      char **ppAllocatedHtmlBuffer,
-                      unsigned int *pAllocatedHtmlBufSizeBytes,
+                      wchar_t **ppAllocatedBuffer,
+                      unsigned int *pAllocatedBufSizeBytes,
                       ErrBlock *pEb)
 {
-    // TODO implement ReplaceCharacters()
-    return -1;
+    wchar_t *pOutputBuffer;
+    unsigned int numOfSearchStrings = 0;
+    unsigned int outputCharacters = 0;
+    unsigned int inputCharacterPos = 0;
+
+    while (ppSearchStrings[numOfSearchStrings] != NULL)
+        numOfSearchStrings++;
+
+    /* determine output size */
+    while (1)
+    {
+        unsigned int hitSearchStringIndex;
+        unsigned int searchStringCharacters;
+        unsigned int replaceCharacters;
+        int index;
+        index = SearchForStringList(pInputBuffer + inputCharacterPos,
+            inputBufSizeBytes - inputCharacterPos * sizeof(wchar_t),
+            ppSearchStrings, numOfSearchStrings, &hitSearchStringIndex);
+        if (index == -1)
+        {
+            outputCharacters +=
+                inputBufSizeBytes / sizeof(wchar_t) - inputCharacterPos;
+            break;
+        }
+        searchStringCharacters = wcslen(ppSearchStrings[hitSearchStringIndex]);
+        replaceCharacters = wcslen(ppReplaceStrings[hitSearchStringIndex]);
+        outputCharacters += index + replaceCharacters;
+        inputCharacterPos += index + searchStringCharacters;
+    }
+
+    pOutputBuffer = malloc(outputCharacters * sizeof(wchar_t));
+    if (pOutputBuffer == NULL)
+    {
+        if (pEb != NULL)
+        {
+            snprintf(pEb->errDescription, sizeof(pEb->errDescription),
+                "Could not allocate buffer for replacement text");
+            pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
+            pEb->functionSpecificErrorCode = 1;
+        }
+        return -1;
+    }
+
+    inputCharacterPos = 0;
+    // TODO fill output buffer
+    // TODO adapt FormatInfo structure
+
+    /* success */
+    *ppAllocatedBuffer = pOutputBuffer;
+    *pAllocatedBufSizeBytes = outputCharacters * sizeof(wchar_t);
+    return 0;
 }
 
 /* GenerateHtmlMarkupFromFormatInfoTag()
