@@ -444,6 +444,7 @@ int ReplaceCharacters(const wchar_t *pInputBuffer,
     unsigned int numOfSearchStrings = 0;
     unsigned int outputCharacters = 0;
     unsigned int inputCharacterPos = 0;
+    unsigned int outputCharPos = 0;
 
     while (ppSearchStrings[numOfSearchStrings] != NULL)
         numOfSearchStrings++;
@@ -484,7 +485,49 @@ int ReplaceCharacters(const wchar_t *pInputBuffer,
     }
 
     inputCharacterPos = 0;
-    // TODO fill output buffer
+    while (1)
+    {
+        unsigned int hitSearchStringIndex;
+        unsigned int searchStringCharacters;
+        unsigned int replaceCharacters;
+        int index;
+        index = SearchForStringList(pInputBuffer + inputCharacterPos,
+            inputBufSizeBytes - inputCharacterPos * sizeof(wchar_t),
+            ppSearchStrings, numOfSearchStrings, &hitSearchStringIndex);
+        if (index == -1)
+        {
+            memcpy(pOutputBuffer + outputCharPos,
+                pInputBuffer + inputCharacterPos,
+                inputBufSizeBytes - inputCharacterPos * sizeof(wchar_t));
+            outputCharPos +=
+                inputBufSizeBytes / sizeof(wchar_t) - inputCharacterPos;
+            break;
+        }
+        searchStringCharacters = wcslen(ppSearchStrings[hitSearchStringIndex]);
+        replaceCharacters = wcslen(ppReplaceStrings[hitSearchStringIndex]);
+        memcpy(pOutputBuffer + outputCharPos,
+            pInputBuffer + inputCharacterPos,
+            index * sizeof(wchar_t));
+        outputCharPos += index;
+        memcpy(pOutputBuffer + outputCharPos,
+            ppReplaceStrings[hitSearchStringIndex],
+            replaceCharacters * sizeof(wchar_t));
+        outputCharPos += replaceCharacters;
+        inputCharacterPos += index + searchStringCharacters;
+    }
+
+    if (outputCharacters != outputCharPos)
+    {
+        if (pEb != NULL)
+        {
+            snprintf(pEb->errDescription, sizeof(pEb->errDescription),
+                "Error in internal buffer size calculation");
+            pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
+            pEb->functionSpecificErrorCode = 2;
+        }
+        free(pOutputBuffer);
+        return -1;
+    }
     // TODO adapt FormatInfo structure
 
     /* success */
