@@ -678,6 +678,9 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
         "EndFragment:0000000000\r\n<html>\r\n<body>\r\n<!--StartFragment-->";
     char *pEndString = "<!--EndFragment-->\r\n</body>\r\n</html>";
     char *pOutputBuffer;
+    ErrBlock replaceCharactersErrBlock;
+    wchar_t *pReplacedInputBuffer;
+    unsigned int replacedInputBufferSizeBytes;
     FormatInfo *pOwnFormatInfo;
     unsigned int formatInfoTotalTags;
     unsigned int formatInfoTagIndex = 0;
@@ -687,7 +690,7 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
     unsigned int outputBufRemainingBytes;
     unsigned int htmlSizeBytes;
     unsigned int i;
-    int iReturnedSize;
+    int retval;
     // TODO zero terminate GenerateClipboardHtml() output?
 
     /* create FormatInfo structure derived from pFormatInfo parameter */
@@ -752,16 +755,32 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
         return -1;
     }
 
-    // TODO replace HTML characters, and optionally linefeeds with <br>
-    //  "   ==>  &quot;     &#34;
-    //  &   ==>  &amp;      &#38;
-    //  <   ==>  &lt;       &#60;
-    //  >   ==>  &gt;       &#62;
+    {
+        wchar_t *ppSearchStrings[] = {L"\"", L"&", L"<", L">", NULL};
+        wchar_t *ppReplaceStrings[] = {L"&quot;", L"&amp;", L"&lt;", L"&gt;", NULL};
+        retval = ReplaceCharacters(pInputBuffer, inputBufSizeBytes,
+            pOwnFormatInfo, ppSearchStrings, ppReplaceStrings,
+            &pReplacedInputBuffer, &replacedInputBufferSizeBytes,
+            &replaceCharactersErrBlock);
+    }
+    if (retval == -1)
+    {
+        if (pEb != NULL)
+        {
+            snprintf(pEb->errDescription, sizeof(pEb->errDescription),
+                "Replacing control characters failed (%s)",
+                replaceCharactersErrBlock.errDescription);
+            pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
+            pEb->functionSpecificErrorCode = 3;
+        }
+        free(pOwnFormatInfo);
+        return -1;
+    }
 
     /* determine output size: input string as UTF8 */
-    iReturnedSize = WideCharToMultiByte(CP_UTF8, 0, pInputBuffer,
-        inputBufSizeBytes / sizeof(wchar_t), NULL, 0, NULL, NULL);
-    if (iReturnedSize == 0)
+    retval = WideCharToMultiByte(CP_UTF8, 0, pReplacedInputBuffer,
+        replacedInputBufferSizeBytes / sizeof(wchar_t), NULL, 0, NULL, NULL);
+    if (retval == 0)
     {
         if (pEb != NULL)
         {
@@ -769,12 +788,13 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
                 "WideCharToMultiByte() space detection failed, "
                 "GetLastError() = 0x%X", GetLastError());
             pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
-            pEb->functionSpecificErrorCode = 3;
+            pEb->functionSpecificErrorCode = 4;
         }
+        free(pReplacedInputBuffer);
         free(pOwnFormatInfo);
         return -1;
     }
-    htmlSizeBytes = (unsigned int)iReturnedSize;
+    htmlSizeBytes = (unsigned int)retval;
 
     /* determine output size: description + fixed start and end HTML code */
     htmlSizeBytes += strlen(pStartString) + strlen(pEndString);
@@ -782,13 +802,13 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
     /* determine output size: generated HTML tags */
     for (i = 0; i < pOwnFormatInfo->numberOfTags; i++)
     {
-        iReturnedSize = GenerateHtmlMarkupFromFormatInfoTag(
+        retval = GenerateHtmlMarkupFromFormatInfoTag(
             pOwnFormatInfo->tags[i].type,
             pOwnFormatInfo->tags[i].parameter,
             pOwnFormatInfo->tags[i].yClose,
             NULL,
             0);
-        if (iReturnedSize == -1)
+        if (retval == -1)
         {
             if (pEb != NULL)
             {
@@ -797,12 +817,13 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
                     "parameter 0x%X failed", pOwnFormatInfo->tags[i].type,
                     pOwnFormatInfo->tags[i].parameter);
                 pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
-                pEb->functionSpecificErrorCode = 4;
+                pEb->functionSpecificErrorCode = 5;
             }
+            free(pReplacedInputBuffer);
             free(pOwnFormatInfo);
             return -1;
         }
-        htmlSizeBytes += (unsigned int)iReturnedSize;
+        htmlSizeBytes += (unsigned int)retval;
     }
 
     /* allocate the output buffer */
@@ -815,17 +836,18 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
             snprintf(pEb->errDescription, sizeof(pEb->errDescription),
                 "Could not allocate buffer for HTML data");
             pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
-            pEb->functionSpecificErrorCode = 5;
+            pEb->functionSpecificErrorCode = 6;
         }
+        free(pReplacedInputBuffer);
         free(pOwnFormatInfo);
         return -1;
     }
 
     /* fill buffer: description and HTML until <!--StartFragment--> */
-    iReturnedSize = (int)strlen(pStartString);
-    strncpy(pOutputBuffer + outputBufWriteIndex, pStartString, iReturnedSize);
-    outputBufWriteIndex += iReturnedSize;
-    outputBufRemainingBytes -= iReturnedSize;
+    retval = (int)strlen(pStartString);
+    strncpy(pOutputBuffer + outputBufWriteIndex, pStartString, retval);
+    outputBufWriteIndex += retval;
+    outputBufRemainingBytes -= retval;
 
     while (1)
     {
@@ -833,7 +855,7 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
         unsigned int nextTagCharacter;
         unsigned int inputCharsToConvert;
 
-        nextTagCharacter = inputBufSizeBytes / sizeof(wchar_t);
+        nextTagCharacter = replacedInputBufferSizeBytes / sizeof(wchar_t);
         for (i = 0; i < pOwnFormatInfo->numberOfTags; i++)
         {
             if (pOwnFormatInfo->tags[i].characterPos <= nextTagCharacter &&
@@ -853,17 +875,17 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
         else
         {
             /* convert all remaining input characters */
-            inputCharsToConvert =
-                (inputBufSizeBytes / sizeof(wchar_t)) - inputCharacterPos;
+            inputCharsToConvert = (replacedInputBufferSizeBytes /
+                sizeof(wchar_t)) - inputCharacterPos;
         }
 
         /* fill buffer: convert input characters */
         if (inputCharsToConvert != 0)
         {
-            iReturnedSize = WideCharToMultiByte(CP_UTF8, 0, pInputBuffer +
+            retval = WideCharToMultiByte(CP_UTF8, 0, pReplacedInputBuffer +
                     inputCharacterPos, inputCharsToConvert, pOutputBuffer +
                     outputBufWriteIndex, outputBufRemainingBytes, NULL, NULL);
-            if (iReturnedSize == 0)
+            if (retval == 0)
             {
                 if (pEb != NULL)
                 {
@@ -872,14 +894,15 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
                         "GetLastError() = 0x%X", GetLastError());
                     pEb->errDescription[
                         sizeof(pEb->errDescription) - 1] = '\0';
-                    pEb->functionSpecificErrorCode = 6;
+                    pEb->functionSpecificErrorCode = 7;
                 }
+                free(pReplacedInputBuffer);
                 free(pOutputBuffer);
                 free(pOwnFormatInfo);
                 return -1;
             }
-            outputBufWriteIndex += iReturnedSize;
-            outputBufRemainingBytes -= iReturnedSize;
+            outputBufWriteIndex += retval;
+            outputBufRemainingBytes -= retval;
         }
         inputCharacterPos += inputCharsToConvert;
 
@@ -892,13 +915,13 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
         {
             if (pOwnFormatInfo->tags[i].characterPos == inputCharacterPos)
             {
-                iReturnedSize = GenerateHtmlMarkupFromFormatInfoTag(
+                retval = GenerateHtmlMarkupFromFormatInfoTag(
                         pOwnFormatInfo->tags[i].type,
                         pOwnFormatInfo->tags[i].parameter,
                         pOwnFormatInfo->tags[i].yClose,
                         pOutputBuffer + outputBufWriteIndex,
                         outputBufRemainingBytes);
-                if (iReturnedSize == -1)
+                if (retval == -1)
                 {
                     if (pEb != NULL)
                     {
@@ -910,26 +933,28 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
                             pOwnFormatInfo->tags[i].parameter);
                         pEb->errDescription[
                             sizeof(pEb->errDescription) - 1] = '\0';
-                        pEb->functionSpecificErrorCode = 7;
+                        pEb->functionSpecificErrorCode = 8;
                     }
+                    free(pReplacedInputBuffer);
                     free(pOutputBuffer);
                     free(pOwnFormatInfo);
                     return -1;
                 }
-                outputBufWriteIndex += iReturnedSize;
-                outputBufRemainingBytes -= iReturnedSize;
+                outputBufWriteIndex += retval;
+                outputBufRemainingBytes -= retval;
             }
         }
     }
 
-    /* the FormatInfo structure is not needed anymore */
+    /* free buffers that are not needed anymore */
+    free(pReplacedInputBuffer);
     free(pOwnFormatInfo);
 
     /* fill buffer: <!--EndFragment--> and closing HTML tags */
-    iReturnedSize = (int)strlen(pEndString);
-    strncpy(pOutputBuffer + outputBufWriteIndex, pEndString, iReturnedSize);
-    outputBufWriteIndex += iReturnedSize;
-    outputBufRemainingBytes -= iReturnedSize;
+    retval = (int)strlen(pEndString);
+    strncpy(pOutputBuffer + outputBufWriteIndex, pEndString, retval);
+    outputBufWriteIndex += retval;
+    outputBufRemainingBytes -= retval;
 
     /* correct EndHTML and EndFragment in the description */
     snprintf(pOutputBuffer + 0x2B, 10, "%010d", htmlSizeBytes);
@@ -943,7 +968,7 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
             snprintf(pEb->errDescription, sizeof(pEb->errDescription),
                 "Error in internal buffer size calculation");
             pEb->errDescription[sizeof(pEb->errDescription) - 1] = '\0';
-            pEb->functionSpecificErrorCode = 8;
+            pEb->functionSpecificErrorCode = 9;
         }
         free(pOutputBuffer);
         return -1;
