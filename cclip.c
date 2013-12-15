@@ -430,6 +430,36 @@ int SearchForStringList(const wchar_t *pInputString,
     return -1;
 }
 
+void ShiftFormatInfoPositions(FormatInfo *pFormatInfo,
+                              unsigned int startCharPos,
+                              unsigned int charactersDeleted,
+                              unsigned int charactersInserted)
+{
+    unsigned int i;
+
+    for (i = 0; i < pFormatInfo->numberOfTags; i++)
+    {
+        if (pFormatInfo->tags[i].characterPos > startCharPos)
+        {
+            /* tags that are within a deleted region:
+               move to the beginning of the deleted region */
+            if (pFormatInfo->tags[i].characterPos <
+                startCharPos + charactersDeleted)
+            {
+                pFormatInfo->tags[i].characterPos = startCharPos;
+            }
+            /* tags that are after a deleted region:
+               move right when more characters are inserted than deleted, move
+               left otherwise */
+            else
+            {
+                pFormatInfo->tags[i].characterPos +=
+                    charactersInserted - charactersDeleted;
+            }
+        }
+    }
+}
+
 // TODO ReplaceCharacters() documentation
 int ReplaceCharacters(const wchar_t *pInputBuffer,
                       unsigned int inputBufSizeBytes,
@@ -496,6 +526,7 @@ int ReplaceCharacters(const wchar_t *pInputBuffer,
             ppSearchStrings, numOfSearchStrings, &hitSearchStringIndex);
         if (index == -1)
         {
+            /* no more strings to replace - insert remaining input string */
             memcpy(pOutputBuffer + outputCharPos,
                 pInputBuffer + inputCharacterPos,
                 inputBufSizeBytes - inputCharacterPos * sizeof(wchar_t));
@@ -503,12 +534,21 @@ int ReplaceCharacters(const wchar_t *pInputBuffer,
                 inputBufSizeBytes / sizeof(wchar_t) - inputCharacterPos;
             break;
         }
+
         searchStringCharacters = wcslen(ppSearchStrings[hitSearchStringIndex]);
         replaceCharacters = wcslen(ppReplaceStrings[hitSearchStringIndex]);
+
+        /* adapt FormatInfo structure tag positions */
+        ShiftFormatInfoPositions(pFormatInfo, index + outputCharPos,
+            searchStringCharacters, replaceCharacters);
+
+        /* insert input string up to characters to be replaced */
         memcpy(pOutputBuffer + outputCharPos,
             pInputBuffer + inputCharacterPos,
             index * sizeof(wchar_t));
         outputCharPos += index;
+
+        /* insert replacement string */
         memcpy(pOutputBuffer + outputCharPos,
             ppReplaceStrings[hitSearchStringIndex],
             replaceCharacters * sizeof(wchar_t));
@@ -528,7 +568,6 @@ int ReplaceCharacters(const wchar_t *pInputBuffer,
         free(pOutputBuffer);
         return -1;
     }
-    // TODO adapt FormatInfo structure
 
     /* success */
     *ppAllocatedBuffer = pOutputBuffer;
