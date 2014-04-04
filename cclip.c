@@ -16,6 +16,10 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+// TODO fix indexing into wchar_t strings to account for Unicode surrogates
+//      --> investigate every spot that does something with sizeof(wchar_t)
+//      --> http://msdn.microsoft.com/en-us/library/dd374069.aspx
+
 #ifdef _MSC_VER
 #define _CRT_SECURE_NO_WARNINGS
 #define snprintf _snprintf
@@ -896,8 +900,8 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
                         sizeof(pEb->errDescription) - 1] = '\0';
                     pEb->functionSpecificErrorCode = 7;
                 }
-                free(pReplacedInputBuffer);
                 free(pOutputBuffer);
+                free(pReplacedInputBuffer);
                 free(pOwnFormatInfo);
                 return -1;
             }
@@ -935,8 +939,8 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
                             sizeof(pEb->errDescription) - 1] = '\0';
                         pEb->functionSpecificErrorCode = 8;
                     }
-                    free(pReplacedInputBuffer);
                     free(pOutputBuffer);
+                    free(pReplacedInputBuffer);
                     free(pOwnFormatInfo);
                     return -1;
                 }
