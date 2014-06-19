@@ -961,8 +961,8 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
     outputBufRemainingBytes -= retval;
 
     /* correct EndHTML and EndFragment in the description */
-    snprintf(pOutputBuffer + 0x2B, 10, "%010d", htmlSizeBytes);
-    snprintf(pOutputBuffer + 0x5D, 10, "%010d", htmlSizeBytes - 36);
+    snprintf(pOutputBuffer + 0x2B, 10, "%010u", htmlSizeBytes);
+    snprintf(pOutputBuffer + 0x5D, 10, "%010u", htmlSizeBytes - 36);
 
     /* sanity check: buffer filled exactly to the end? */
     if (outputBufWriteIndex != htmlSizeBytes || outputBufRemainingBytes != 0)
