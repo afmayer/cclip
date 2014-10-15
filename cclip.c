@@ -984,6 +984,20 @@ int GenerateClipboardHtml(const wchar_t *pInputBuffer,
     return 0;
 }
 
+/* ExtractFormatInfoFromAnsiEscape()
+ *
+ * TODO ExtractFormatInfoFromAnsiEscape() documentation
+ */
+int ExtractFormatInfoFromAnsiEscape(const wchar_t *pInputBuffer,
+                                    unsigned int inputBufSizeBytes,
+                                    FormatInfo **ppAllocatedFormatInfo,
+                                    wchar_t **ppAllocatedWideCharBuffer,
+                                    unsigned int *pAllocatedBufSizeBytes,
+                                    ErrBlock *pEb)
+{
+    //TODO implement ExtractFormatInfoFromAnsiEscape()
+}
+
 int main(int argc, char *argv[])
 {
     HANDLE standardin = GetStdHandle(STD_INPUT_HANDLE);
@@ -1064,6 +1078,23 @@ int main(int argc, char *argv[])
     }
 
     free(pInputBuffer);
+
+    // TODO create format info
+
+    // TODO REMOVE DEBUG CODE (GENERATE + SET CLIPBOARD HTML DATA)
+    if (1)
+    {
+        char *pHtmlBuf_;
+        unsigned int htmlBufLenBytes_;
+        _getch();
+        retval = GenerateClipboardHtml(pWideCharBuf, wideCharBufSizeBytes - 2,
+            NULL, &pHtmlBuf_, &htmlBufLenBytes_, &eb);
+        if (retval == -1) exit(1);
+        retval = WriteToClipboard(RegisterClipboardFormat("HTML Format"),
+                    pHtmlBuf_, htmlBufLenBytes_, &eb);
+        if (retval == -1) exit(1);
+        exit(0);
+    }
 
     retval = WriteToClipboard(CF_UNICODETEXT, pWideCharBuf,
         wideCharBufSizeBytes, &eb);
